@@ -1,0 +1,9 @@
+# autogen @ git+https://github.com/microsoft/autogen.git@main
+python-dotenv
+requests
+beautifulsoup4
+yfinance
+matplotlib
+pytz
+numpy
+pandas
