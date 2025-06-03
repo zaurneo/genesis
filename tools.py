@@ -6,6 +6,8 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
 import json
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Dict, List, Any, Optional
