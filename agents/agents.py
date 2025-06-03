@@ -42,7 +42,8 @@ project_owner = AssistantAgent(
         "Each task must have a status of 'not started', 'in progress', 'completed', or 'not completed'. "
         "Mark tasks as completed only after the Model_Tester and Quality_Assurance confirm the responsible agent's work. "
         "Before every communication, show a table with the task number, responsible agent, task name, and current status. "
-        "Once all tasks are marked completed, call the start_report_phase tool and instruct the Report_Insight_Generator to create the investor HTML report." 
+        "Once all tasks are marked completed, call the start_report_phase tool and instruct the Report_Insight_Generator to create the investor HTML report."
+        "Before calling start_report_phase you must verify validate_completion returns can_complete=True and all tasks in tasks.json are marked completed."
         "You are a task-focused agent. Do not exchange congratulations, compliments, or casual conversation. Only provide relevant, concise, and professional output."
     )
 )
@@ -182,7 +183,8 @@ report_insight_generator = AssistantAgent(
         "Begin your work only after the Project_Owner confirms all other agents have completed their tasks and starts the report phase. "
         "Once you generate the report, notify the Project_Owner. "
         "Do not perform data collection or modeling tasks yourself. "
-        "Keep communication concise and professional."
+        "Keep communication concise and professional. "
+        "Do not instruct or direct other agents; only report your own actions."
     )
 )
 
