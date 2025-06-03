@@ -1,4 +1,5 @@
 from autogen_agentchat.teams import RoundRobinGroupChat
+from teams import OwnerMediationGroupChat
 from autogen_agentchat.ui import Console
 import asyncio
 from agents.agents import project_owner, data_engineer, model_executor, model_tester, quality_assurance
@@ -17,12 +18,11 @@ task = (
 
 async def main():
     text_termination = TextMentionTermination("GENESIS COMPLETED")
-    team = RoundRobinGroupChat([project_owner, data_engineer, model_executor, 
-                                # model_tester, quality_assurance
-                                ], 
-                               # max_turns=3, 
-                               termination_condition=text_termination
-                           )
+    team = OwnerMediationGroupChat(
+        project_owner,
+        [data_engineer, model_executor, model_tester, quality_assurance],
+        termination_condition=text_termination
+    )
     stream = team.run_stream(task=task)
     await Console(stream)
     await model_client.close()

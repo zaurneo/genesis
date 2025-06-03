@@ -1050,6 +1050,34 @@ def generate_quality_report() -> Dict[str, Any]:
     except Exception as e:
         return {"error": f"QA report generation failed: {str(e)}"}
 
+def generate_html_report() -> Dict[str, Any]:
+    """Create an investor-friendly HTML summary using available reports."""
+    try:
+        parts = ["<html><head><title>Investor Report</title></head><body>",
+                 "<h1>Project Results</h1>"]
+        if os.path.exists(file_path("data_report.json")):
+            with open(file_path("data_report.json"), "r") as f:
+                parts.append("<h2>Data Report</h2><pre>" + json.dumps(json.load(f), indent=2) + "</pre>")
+        if os.path.exists(file_path("evaluation.json")):
+            with open(file_path("evaluation.json"), "r") as f:
+                parts.append("<h2>Model Evaluation</h2><pre>" + json.dumps(json.load(f), indent=2) + "</pre>")
+        if os.path.exists(file_path("quality_report.json")):
+            with open(file_path("quality_report.json"), "r") as f:
+                parts.append("<h2>Quality Assurance</h2><pre>" + json.dumps(json.load(f), indent=2) + "</pre>")
+        if os.path.exists(file_path("analysis_chart.png")):
+            import base64
+            with open(file_path("analysis_chart.png"), "rb") as f:
+                img = base64.b64encode(f.read()).decode("utf-8")
+            parts.append(f"<img src='data:image/png;base64,{img}' alt='Chart'>")
+        parts.append("</body></html>")
+        output = file_path("investor_report.html")
+        with open(output, "w") as f:
+            f.write("\n".join(parts))
+        return {"success": True, "file": output}
+    except Exception as e:
+        return {"error": f"HTML report generation failed: {str(e)}"}
+
+
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================

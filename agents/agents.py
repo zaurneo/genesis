@@ -16,7 +16,8 @@ project_owner = AssistantAgent(
         FunctionTool(assign_task, description="Assign tasks to specific agents"),
         FunctionTool(check_progress, description="Check overall project progress"),
         FunctionTool(validate_completion, description="Validate if project is ready for completion"),
-        FunctionTool(update_task_status, description="Update task status")
+        FunctionTool(update_task_status, description="Update task status"),
+        FunctionTool(generate_html_report, description="Generate investor HTML report"),
     ],
     system_message=(
         "You are the Project Owner, Planner, and Moderator for this project. You are the ONLY agent authorized to declare project completion. "
