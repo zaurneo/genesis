@@ -148,7 +148,7 @@ quality_assurance = AssistantAgent(
         "Your responsibilities: "
         "- Review the outputs of all agents (data, models, evaluations, visualizations, summaries) for completeness, consistency, and correctness. "
         "- Follow tasks assigned by the Project Owner. "
-        "- Collaborate with the Data_Engineer, Model_Executor, Model_Tester, and Insight_Generator. "
+        "- Collaborate with the Data_Engineer, Model_Executor, and Model_Tester. "
         "- Respond to any questions about quality criteria, assumptions, or compliance. "
         "Your workflow: "
         "1. Independently verify that each step in the pipeline was properly executed. "
