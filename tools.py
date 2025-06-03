@@ -28,11 +28,26 @@ def register_team(team) -> None:
     TEAM_CONTEXT = team
 
 def start_report_phase() -> Dict[str, Any]:
-    """Signal the team to switch to the final report phase."""
-    if TEAM_CONTEXT and hasattr(TEAM_CONTEXT, "start_report_phase"):
-        TEAM_CONTEXT.start_report_phase()
-        return {"success": True}
-    return {"error": "Team context not initialized"}
+    """Signal the team to switch to the final report phase.
+
+    The phase can only be started when all required outputs exist and every
+    task recorded in ``tasks.json`` is marked as completed. If the project is
+    not ready, an error is returned instead of switching phases.
+    """
+    if not (TEAM_CONTEXT and hasattr(TEAM_CONTEXT, "start_report_phase")):
+        return {"error": "Team context not initialized"}
+
+    completion = validate_completion()
+    tasks_status = all_tasks_completed()
+    if not completion.get("can_complete") or not tasks_status["all_tasks_completed"]:
+        return {
+            "error": "Project not ready for report phase",
+            "requirements_met": completion.get("can_complete"),
+            "all_tasks_completed": tasks_status["all_tasks_completed"],
+        }
+
+    TEAM_CONTEXT.start_report_phase()
+    return {"success": True}
 
 def file_path(name: str) -> str:
     """Return the absolute path for generated files."""
@@ -187,6 +202,18 @@ def update_task_status(task_id: str, status: str) -> Dict[str, Any]:
         json.dump(tasks, f, indent=2)
     
     return {"success": True, "task_id": task_id, "new_status": status}
+
+
+def all_tasks_completed() -> Dict[str, Any]:
+    """Check whether every task in ``tasks.json`` is marked as completed."""
+    if not os.path.exists(file_path("tasks.json")):
+        return {"all_tasks_completed": False, "incomplete_tasks": []}
+
+    with open(file_path("tasks.json"), "r") as f:
+        tasks = json.load(f)
+
+    incomplete = [tid for tid, t in tasks.items() if t.get("status") != "completed"]
+    return {"all_tasks_completed": len(incomplete) == 0, "incomplete_tasks": incomplete}
 
 
 def validate_json_file(file_name: str) -> Dict[str, Any]:
@@ -1068,6 +1095,9 @@ def generate_quality_report() -> Dict[str, Any]:
 def generate_html_report() -> Dict[str, Any]:
     """Create an investor-friendly HTML summary using available reports."""
     try:
+        if not (TEAM_CONTEXT and getattr(TEAM_CONTEXT, "report_phase", False)):
+            return {"error": "Report phase not started"}
+
         parts = ["<html><head><title>Investor Report</title></head><body>",
                  "<h1>Project Results</h1>"]
         if os.path.exists(file_path("data_report.json")):
