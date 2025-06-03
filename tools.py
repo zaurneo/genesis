@@ -649,7 +649,7 @@ def evaluate_model_performance() -> Dict[str, Any]:
             "rmse": float(rmse),
             "mae": float(mae),
             "r2_score": float(r2),
-            "direction_accuracy": float(direction_accuracy) if direction_accuracy else None,
+            "direction_accuracy": float(direction_accuracy) if direction_accuracy is not None else None,
             "test_samples": len(y_test_true),
             "target_type": feature_info["target"]
         }
@@ -659,7 +659,7 @@ def evaluate_model_performance() -> Dict[str, Any]:
         
         return {"success": True, "evaluation": evaluation}
     except Exception as e:
-        return {"error": f"Model evaluation fairled: {str(e)}"}
+        return {"error": f"Model evaluation failed: {str(e)}"}
 
 def backtest_strategy() -> Dict[str, Any]:
     """
