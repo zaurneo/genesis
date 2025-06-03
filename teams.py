@@ -18,9 +18,20 @@ class OwnerMediationGroupChat(RoundRobinGroupChat):
         self._order = order
         self._idx = 0
 
-        # Initialize parent with unique participants and custom speaker selector
+        # Initialize parent with unique participants
         participants = [owner] + self.agents
-        super().__init__(participants, speaker_selection_method=self._select_next, **kwargs)
+        # Older versions of ``autogen`` do not accept ``speaker_selection_method``
+        # in ``RoundRobinGroupChat.__init__``. We therefore call the parent
+        # initializer without it and set the speaker selection method
+        # afterwards for compatibility.
+        super().__init__(participants, **kwargs)
+
+        # Set the speaker selection hook if supported
+        if hasattr(self, "speaker_selection_method"):
+            self.speaker_selection_method = self._select_next
+        else:
+            # Fallback for APIs that use a different attribute name
+            setattr(self, "select_speaker", self._select_next)
 
     def _select_next(self, last_speaker=None):
         speaker = self._order[self._idx]
