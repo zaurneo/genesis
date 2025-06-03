@@ -6,6 +6,8 @@ This is the modular structure.
 
 The `OwnerMediationGroupChat` ensures every agent interacts only with the
 `Project_Owner`. Agents take turns in a round-robin sequence mediated by the
-owner. Once all agents finish their tasks, the project owner can use the
-`generate_html_report` tool to create `investor_report.html` summarizing the
-results.
+owner. Once all analytical tasks are complete the owner switches the chat to a
+report phase. During this phase only the `Project_Owner` and the new
+`Report_Insight_Generator` agent can speak. The report agent compiles
+`investor_report.html` using all generated data and evaluations so investors
+receive a clear, structured summary.

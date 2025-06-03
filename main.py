@@ -2,10 +2,18 @@ from autogen_agentchat.teams import RoundRobinGroupChat
 from teams import OwnerMediationGroupChat
 from autogen_agentchat.ui import Console
 import asyncio
-from agents.agents import project_owner, data_engineer, model_executor, model_tester, quality_assurance
+from agents.agents import (
+    project_owner,
+    data_engineer,
+    model_executor,
+    model_tester,
+    quality_assurance,
+    report_insight_generator,
+)
 from clients.clients import model_client_gpt4o as model_client
 from autogen_agentchat.conditions import TextMentionTermination
 import config
+from tools import register_team
 
 project_path = config.GENERATED_FILES_DIR
 
@@ -22,8 +30,10 @@ async def main():
     team = OwnerMediationGroupChat(
         project_owner,
         [data_engineer, model_executor, model_tester, quality_assurance],
-        termination_condition=text_termination
+        report_agent=report_insight_generator,
+        termination_condition=text_termination,
     )
+    register_team(team)
     stream = team.run_stream(task=task)
     await Console(stream)
     await model_client.close()

@@ -19,6 +19,21 @@ import pickle
 import os
 import config
 
+# Reference to the active group chat so tools can control the conversation
+TEAM_CONTEXT = None
+
+def register_team(team) -> None:
+    """Register the running team for coordination tools."""
+    global TEAM_CONTEXT
+    TEAM_CONTEXT = team
+
+def start_report_phase() -> Dict[str, Any]:
+    """Signal the team to switch to the final report phase."""
+    if TEAM_CONTEXT and hasattr(TEAM_CONTEXT, "start_report_phase"):
+        TEAM_CONTEXT.start_report_phase()
+        return {"success": True}
+    return {"error": "Team context not initialized"}
+
 def file_path(name: str) -> str:
     """Return the absolute path for generated files."""
     return os.path.join(config.GENERATED_FILES_DIR, name)

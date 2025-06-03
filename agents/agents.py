@@ -17,7 +17,7 @@ project_owner = AssistantAgent(
         FunctionTool(check_progress, description="Check overall project progress"),
         FunctionTool(validate_completion, description="Validate if project is ready for completion"),
         FunctionTool(update_task_status, description="Update task status"),
-        FunctionTool(generate_html_report, description="Generate investor HTML report"),
+        FunctionTool(start_report_phase, description="Begin final report phase"),
     ],
     system_message=(
         "You are the Project Owner, Planner, and Moderator for this project. You are the ONLY agent authorized to declare project completion. "
@@ -42,7 +42,7 @@ project_owner = AssistantAgent(
         "Each task must have a status of 'not started', 'in progress', 'completed', or 'not completed'. "
         "Mark tasks as completed only after the Model_Tester and Quality_Assurance confirm the responsible agent's work. "
         "Before every communication, show a table with the task number, responsible agent, task name, and current status. "
-        "Once all tasks are marked completed, collect all outputs and use the HTML report tool to present results to investors."
+        "Once all tasks are marked completed, call the start_report_phase tool and instruct the Report_Insight_Generator to create the investor HTML report." 
         "You are a task-focused agent. Do not exchange congratulations, compliments, or casual conversation. Only provide relevant, concise, and professional output."
     )
 )
@@ -166,6 +166,23 @@ quality_assurance = AssistantAgent(
         "Give a report to project owner about the tools and required improvement."
         "You are a task-oriented agent. Focus only on your responsibilities. "
         "Do not exchange congratulations, compliments, or casual conversation. Only provide relevant, concise, and professional output."
+    )
+)
+
+report_insight_generator = AssistantAgent(
+    name="Report_Insight_Generator",
+    model_client=model_client,
+    tools=[
+        FunctionTool(generate_html_report, description="Compile final investor HTML report"),
+    ],
+    system_message=(
+        "You are the Report and Insight Generator AI agent. "
+        "Your sole responsibility is to create a clear, structured, and organized investor report in HTML format. "
+        "Use the information and files produced by the other agents to summarize findings, key metrics, and visualizations. "
+        "Begin your work only after the Project_Owner confirms all other agents have completed their tasks and starts the report phase. "
+        "Once you generate the report, notify the Project_Owner. "
+        "Do not perform data collection or modeling tasks yourself. "
+        "Keep communication concise and professional."
     )
 )
 
