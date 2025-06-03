@@ -17,6 +17,11 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 import pickle
 import os
+import config
+
+def file_path(name: str) -> str:
+    """Return the absolute path for generated files."""
+    return os.path.join(config.GENERATED_FILES_DIR, name)
 
 # =============================================================================
 # PROJECT OWNER TOOLS
@@ -46,12 +51,12 @@ def assign_task(agent_name: str, task_description: str, priority: str = "medium"
     
     # Save to tasks file
     tasks = {}
-    if os.path.exists("tasks.json"):
-        with open("tasks.json", "r") as f:
+    if os.path.exists(file_path("tasks.json")):
+        with open(file_path("tasks.json"), "r") as f:
             tasks = json.load(f)
     
     tasks[task_id] = task
-    with open("tasks.json", "w") as f:
+    with open(file_path("tasks.json"), "w") as f:
         json.dump(tasks, f, indent=2)
     
     return {"success": True, "task_id": task_id, "assigned_to": agent_name}
@@ -64,12 +69,12 @@ def check_progress() -> Dict[str, Any]:
         Dict with progress summary
     """
     progress = {
-        "data_loaded": os.path.exists("stock_data.csv"),
-        "data_processed": os.path.exists("processed_data.csv"),
-        "model_trained": os.path.exists("trained_model.pkl"),
-        "evaluation_done": os.path.exists("evaluation.json"),
-        "visualization_created": os.path.exists("analysis_chart.png"),
-        "quality_checked": os.path.exists("quality_report.json")
+        "data_loaded": os.path.exists(file_path("stock_data.csv")),
+        "data_processed": os.path.exists(file_path("processed_data.csv")),
+        "model_trained": os.path.exists(file_path("trained_model.pkl")),
+        "evaluation_done": os.path.exists(file_path("evaluation.json")),
+        "visualization_created": os.path.exists(file_path("analysis_chart.png")),
+        "quality_checked": os.path.exists(file_path("quality_report.json"))
     }
     
     completed = sum(progress.values())
@@ -87,12 +92,12 @@ def validate_completion() -> Dict[str, Any]:
         Dict with validation results
     """
     requirements = [
-        ("stock_data.csv", "Stock data loaded"),
-        ("processed_data.csv", "Data processed"), 
-        ("trained_model.pkl", "Model trained"),
-        ("evaluation.json", "Model evaluated"),
-        ("analysis_chart.png", "Visualization created"),
-        ("quality_report.json", "Quality assured")
+        (file_path("stock_data.csv"), "Stock data loaded"),
+        (file_path("processed_data.csv"), "Data processed"),
+        (file_path("trained_model.pkl"), "Model trained"),
+        (file_path("evaluation.json"), "Model evaluated"),
+        (file_path("analysis_chart.png"), "Visualization created"),
+        (file_path("quality_report.json"), "Quality assured")
     ]
     
     results = []
@@ -121,10 +126,10 @@ def update_task_status(task_id: str, status: str) -> Dict[str, Any]:
     Returns:
         Dict with update confirmation
     """
-    if not os.path.exists("tasks.json"):
+    if not os.path.exists(file_path("tasks.json")):
         return {"error": "No tasks found"}
-    
-    with open("tasks.json", "r") as f:
+
+    with open(file_path("tasks.json"), "r") as f:
         tasks = json.load(f)
     
     if task_id not in tasks:
@@ -133,7 +138,7 @@ def update_task_status(task_id: str, status: str) -> Dict[str, Any]:
     tasks[task_id]["status"] = status
     tasks[task_id]["updated_at"] = datetime.now().isoformat()
     
-    with open("tasks.json", "w") as f:
+    with open(file_path("tasks.json"), "w") as f:
         json.dump(tasks, f, indent=2)
     
     return {"success": True, "task_id": task_id, "new_status": status}
@@ -168,7 +173,7 @@ def load_stock_data(symbol: str, period: str = "1y") -> Dict[str, Any]:
         data['Volatility'] = data['Close'].rolling(window=20).std()
         
         # Save data
-        data.to_csv("stock_data.csv")
+        data.to_csv(file_path("stock_data.csv"))
         
         return {
             "success": True,
@@ -193,10 +198,10 @@ def clean_and_prepare_data(target: str = "next_day_return") -> Dict[str, Any]:
         Dict with data preparation results
     """
     try:
-        if not os.path.exists("stock_data.csv"):
+        if not os.path.exists(file_path("stock_data.csv")):
             return {"error": "No stock data found. Load data first."}
-        
-        data = pd.read_csv("stock_data.csv", index_col=0, parse_dates=True)
+
+        data = pd.read_csv(file_path("stock_data.csv"), index_col=0, parse_dates=True)
         
         # Remove missing values
         data = data.dropna()
@@ -230,7 +235,7 @@ def clean_and_prepare_data(target: str = "next_day_return") -> Dict[str, Any]:
         
         # Save processed data
         processed_data = pd.concat([X, y], axis=1)
-        processed_data.to_csv("processed_data.csv")
+        processed_data.to_csv(file_path("processed_data.csv"))
         
         # Save feature info
         feature_info = {
@@ -240,7 +245,7 @@ def clean_and_prepare_data(target: str = "next_day_return") -> Dict[str, Any]:
             "target_type": "regression" if target in ["next_day_return", "close_price"] else "classification"
         }
         
-        with open("feature_info.json", "w") as f:
+        with open(file_path("feature_info.json"), "w") as f:
             json.dump(feature_info, f, indent=2)
         
         return {
@@ -266,10 +271,10 @@ def create_visualization() -> Dict[str, Any]:
         Dict with visualization results
     """
     try:
-        if not os.path.exists("stock_data.csv"):
+        if not os.path.exists(file_path("stock_data.csv")):
             return {"error": "No stock data found"}
         
-        data = pd.read_csv("stock_data.csv", index_col=0, parse_dates=True)
+        data = pd.read_csv(file_path("stock_data.csv"), index_col=0, parse_dates=True)
         
         # Create subplot figure
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
@@ -303,12 +308,12 @@ def create_visualization() -> Dict[str, Any]:
         axes[1, 1].grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plt.savefig("analysis_chart.png", dpi=300, bbox_inches='tight')
+        plt.savefig(file_path("analysis_chart.png"), dpi=300, bbox_inches='tight')
         plt.close()
         
         return {
             "success": True,
-            "chart_saved": "analysis_chart.png",
+            "chart_saved": file_path("analysis_chart.png"),
             "stats": {
                 "total_days": len(data),
                 "avg_volume": float(data['Volume'].mean()),
@@ -327,10 +332,10 @@ def generate_data_report() -> Dict[str, Any]:
         Dict with data analysis report
     """
     try:
-        if not os.path.exists("stock_data.csv"):
+        if not os.path.exists(file_path("stock_data.csv")):
             return {"error": "No stock data found"}
-        
-        data = pd.read_csv("stock_data.csv", index_col=0, parse_dates=True)
+
+        data = pd.read_csv(file_path("stock_data.csv"), index_col=0, parse_dates=True)
         
         # Basic statistics
         report = {
@@ -357,7 +362,7 @@ def generate_data_report() -> Dict[str, Any]:
             }
         }
         
-        with open("data_report.json", "w") as f:
+        with open(file_path("data_report.json"), "w") as f:
             json.dump(report, f, indent=2)
         
         return {"success": True, "report": report}
@@ -379,13 +384,13 @@ def train_prediction_model(model_type: str = "random_forest") -> Dict[str, Any]:
         Dict with training results
     """
     try:
-        if not os.path.exists("processed_data.csv"):
+        if not os.path.exists(file_path("processed_data.csv")):
             return {"error": "No processed data found"}
-        
-        data = pd.read_csv("processed_data.csv", index_col=0)
+
+        data = pd.read_csv(file_path("processed_data.csv"), index_col=0)
         
         # Load feature info
-        with open("feature_info.json", "r") as f:
+        with open(file_path("feature_info.json"), "r") as f:
             feature_info = json.load(f)
         
         # Prepare features and target
@@ -414,7 +419,7 @@ def train_prediction_model(model_type: str = "random_forest") -> Dict[str, Any]:
         model.fit(X_train, y_train)
         
         # Save model
-        with open("trained_model.pkl", "wb") as f:
+        with open(file_path("trained_model.pkl"), "wb") as f:
             pickle.dump(model, f)
         
         # Generate predictions
@@ -429,7 +434,7 @@ def train_prediction_model(model_type: str = "random_forest") -> Dict[str, Any]:
             "test_actual": y_test.tolist()
         }
         
-        with open("predictions.json", "w") as f:
+        with open(file_path("predictions.json"), "w") as f:
             json.dump(predictions, f, indent=2)
         
         return {
@@ -454,15 +459,15 @@ def make_predictions(days_ahead: int = 5) -> Dict[str, Any]:
         Dict with prediction results
     """
     try:
-        if not os.path.exists("trained_model.pkl"):
+        if not os.path.exists(file_path("trained_model.pkl")):
             return {"error": "No trained model found"}
-        
+
         # Load model
-        with open("trained_model.pkl", "rb") as f:
+        with open(file_path("trained_model.pkl"), "rb") as f:
             model = pickle.load(f)
         
         # Load latest data
-        data = pd.read_csv("processed_data.csv", index_col=0)
+        data = pd.read_csv(file_path("processed_data.csv"), index_col=0)
         
         # Use last row as features for prediction
         latest_features = data.drop(columns=['target']).iloc[-1:].values
@@ -471,7 +476,7 @@ def make_predictions(days_ahead: int = 5) -> Dict[str, Any]:
         prediction = model.predict(latest_features)[0]
         
         # Load feature info for interpretation
-        with open("feature_info.json", "r") as f:
+        with open(file_path("feature_info.json"), "r") as f:
             feature_info = json.load(f)
         
         # Interpret prediction based on target type
@@ -495,7 +500,7 @@ def make_predictions(days_ahead: int = 5) -> Dict[str, Any]:
         }
         
         # Save prediction
-        with open("latest_prediction.json", "w") as f:
+        with open(file_path("latest_prediction.json"), "w") as f:
             json.dump(result, f, indent=2)
         
         return result
@@ -513,14 +518,14 @@ def optimize_model(param_grid: Dict[str, List] = None) -> Dict[str, Any]:
         Dict with optimization results
     """
     try:
-        if not os.path.exists("processed_data.csv"):
+        if not os.path.exists(file_path("processed_data.csv")):
             return {"error": "No processed data found"}
         
         # Simple optimization - just try different n_estimators for RandomForest
         if param_grid is None:
             param_grid = {"n_estimators": [50, 100, 200]}
         
-        data = pd.read_csv("processed_data.csv", index_col=0)
+        data = pd.read_csv(file_path("processed_data.csv"), index_col=0)
         
         target_col = 'target'
         feature_cols = [col for col in data.columns if col != target_col]
@@ -566,11 +571,11 @@ def get_feature_importance() -> Dict[str, Any]:
         Dict with feature importance results
     """
     try:
-        if not os.path.exists("trained_model.pkl"):
+        if not os.path.exists(file_path("trained_model.pkl")):
             return {"error": "No trained model found"}
         
         # Load model
-        with open("trained_model.pkl", "rb") as f:
+        with open(file_path("trained_model.pkl"), "rb") as f:
             model = pickle.load(f)
         
         # Check if model has feature_importances_
@@ -578,7 +583,7 @@ def get_feature_importance() -> Dict[str, Any]:
             return {"error": "Model does not support feature importance"}
         
         # Load feature names
-        data = pd.read_csv("processed_data.csv", index_col=0)
+        data = pd.read_csv(file_path("processed_data.csv"), index_col=0)
         feature_names = [col for col in data.columns if col != 'target']
         
         # Get importance
@@ -596,7 +601,7 @@ def get_feature_importance() -> Dict[str, Any]:
             "top_5_features": list(sorted_importance.keys())[:5]
         }
         
-        with open("feature_importance.json", "w") as f:
+        with open(file_path("feature_importance.json"), "w") as f:
             json.dump(result, f, indent=2)
         
         return result
@@ -615,14 +620,14 @@ def evaluate_model_performance() -> Dict[str, Any]:
         Dict with evaluation results
     """
     try:
-        if not os.path.exists("predictions.json"):
+        if not os.path.exists(file_path("predictions.json")):
             return {"error": "No predictions found"}
-        
-        with open("predictions.json", "r") as f:
+
+        with open(file_path("predictions.json"), "r") as f:
             predictions = json.load(f)
         
         # Load feature info
-        with open("feature_info.json", "r") as f:
+        with open(file_path("feature_info.json"), "r") as f:
             feature_info = json.load(f)
         
         # Calculate metrics
@@ -656,7 +661,7 @@ def evaluate_model_performance() -> Dict[str, Any]:
             "target_type": feature_info["target"]
         }
         
-        with open("evaluation.json", "w") as f:
+        with open(file_path("evaluation.json"), "w") as f:
             json.dump(evaluation, f, indent=2)
         
         return {"success": True, "evaluation": evaluation}
@@ -671,14 +676,14 @@ def backtest_strategy() -> Dict[str, Any]:
         Dict with backtest results
     """
     try:
-        if not os.path.exists("predictions.json") or not os.path.exists("stock_data.csv"):
+        if not os.path.exists(file_path("predictions.json")) or not os.path.exists(file_path("stock_data.csv")):
             return {"error": "Missing predictions or stock data"}
-        
-        with open("predictions.json", "r") as f:
+
+        with open(file_path("predictions.json"), "r") as f:
             predictions = json.load(f)
         
         # Load feature info
-        with open("feature_info.json", "r") as f:
+        with open(file_path("feature_info.json"), "r") as f:
             feature_info = json.load(f)
         
         # Simple strategy: buy if prediction > 0, sell if < 0
@@ -714,7 +719,7 @@ def backtest_strategy() -> Dict[str, Any]:
             "profitable_trades": int(np.sum(strategy_returns > 0))
         }
         
-        with open("backtest.json", "w") as f:
+        with open(file_path("backtest.json"), "w") as f:
             json.dump(backtest_results, f, indent=2)
         
         return {"success": True, "backtest": backtest_results}
@@ -729,10 +734,10 @@ def validate_predictions() -> Dict[str, Any]:
         Dict with validation results
     """
     try:
-        if not os.path.exists("predictions.json"):
+        if not os.path.exists(file_path("predictions.json")):
             return {"error": "No predictions found"}
-        
-        with open("predictions.json", "r") as f:
+
+        with open(file_path("predictions.json"), "r") as f:
             predictions = json.load(f)
         
         train_pred = np.array(predictions["train_predictions"])
@@ -771,7 +776,7 @@ def validate_predictions() -> Dict[str, Any]:
             validation_results["overfitting_check"]["overfitting_ratio"] < 10  # Not too much overfitting
         ])
         
-        with open("prediction_validation.json", "w") as f:
+        with open(file_path("prediction_validation.json"), "w") as f:
             json.dump(validation_results, f, indent=2)
         
         return {"success": True, "validation": validation_results}
@@ -792,18 +797,18 @@ def generate_test_report() -> Dict[str, Any]:
         }
         
         # Include evaluation
-        if os.path.exists("evaluation.json"):
-            with open("evaluation.json", "r") as f:
+        if os.path.exists(file_path("evaluation.json")):
+            with open(file_path("evaluation.json"), "r") as f:
                 report["test_results"]["evaluation"] = json.load(f)
         
         # Include backtest
-        if os.path.exists("backtest.json"):
-            with open("backtest.json", "r") as f:
+        if os.path.exists(file_path("backtest.json")):
+            with open(file_path("backtest.json"), "r") as f:
                 report["test_results"]["backtest"] = json.load(f)
         
         # Include validation
-        if os.path.exists("prediction_validation.json"):
-            with open("prediction_validation.json", "r") as f:
+        if os.path.exists(file_path("prediction_validation.json")):
+            with open(file_path("prediction_validation.json"), "r") as f:
                 report["test_results"]["validation"] = json.load(f)
         
         # Overall assessment
@@ -818,7 +823,7 @@ def generate_test_report() -> Dict[str, Any]:
             report["test_results"].get("evaluation", {}).get("r2_score", 0) > 0):
             report["overall_assessment"]["ready_for_deployment"] = True
         
-        with open("test_report.json", "w") as f:
+        with open(file_path("test_report.json"), "w") as f:
             json.dump(report, f, indent=2)
         
         return {"success": True, "report": report}
@@ -840,8 +845,8 @@ def check_data_quality() -> Dict[str, Any]:
         quality_checks = {}
         
         # Check stock data
-        if os.path.exists("stock_data.csv"):
-            data = pd.read_csv("stock_data.csv", index_col=0)
+        if os.path.exists(file_path("stock_data.csv")):
+            data = pd.read_csv(file_path("stock_data.csv"), index_col=0)
             quality_checks["stock_data"] = {
                 "exists": True,
                 "rows": len(data),
@@ -853,8 +858,8 @@ def check_data_quality() -> Dict[str, Any]:
             quality_checks["stock_data"] = {"exists": False}
         
         # Check processed data
-        if os.path.exists("processed_data.csv"):
-            data = pd.read_csv("processed_data.csv", index_col=0)
+        if os.path.exists(file_path("processed_data.csv")):
+            data = pd.read_csv(file_path("processed_data.csv"), index_col=0)
             quality_checks["processed_data"] = {
                 "exists": True,
                 "rows": len(data),
@@ -891,21 +896,21 @@ def verify_model_outputs() -> Dict[str, Any]:
     """
     try:
         verifications = {
-            "trained_model": os.path.exists("trained_model.pkl"),
-            "predictions": os.path.exists("predictions.json"),
-            "evaluation": os.path.exists("evaluation.json"),
-            "feature_importance": os.path.exists("feature_importance.json")
+            "trained_model": os.path.exists(file_path("trained_model.pkl")),
+            "predictions": os.path.exists(file_path("predictions.json")),
+            "evaluation": os.path.exists(file_path("evaluation.json")),
+            "feature_importance": os.path.exists(file_path("feature_importance.json"))
         }
         
         # Check if files contain valid data
         if verifications["predictions"]:
-            with open("predictions.json", "r") as f:
+            with open(file_path("predictions.json"), "r") as f:
                 pred_data = json.load(f)
             verifications["predictions_valid"] = all(key in pred_data for key in 
                                                   ["train_predictions", "test_predictions", "train_actual", "test_actual"])
         
         if verifications["evaluation"]:
-            with open("evaluation.json", "r") as f:
+            with open(file_path("evaluation.json"), "r") as f:
                 eval_data = json.load(f)
             verifications["evaluation_valid"] = "mse" in eval_data and "r2_score" in eval_data
         
@@ -923,10 +928,10 @@ def assess_compliance() -> Dict[str, Any]:
         Dict with compliance assessment
     """
     requirements = {
-        "data_loaded": os.path.exists("stock_data.csv"),
-        "visualization_created": os.path.exists("analysis_chart.png"),
-        "model_trained": os.path.exists("trained_model.pkl"),
-        "model_evaluated": os.path.exists("evaluation.json"),
+        "data_loaded": os.path.exists(file_path("stock_data.csv")),
+        "visualization_created": os.path.exists(file_path("analysis_chart.png")),
+        "model_trained": os.path.exists(file_path("trained_model.pkl")),
+        "model_evaluated": os.path.exists(file_path("evaluation.json")),
         "quality_assured": True  # This function itself
     }
     
@@ -972,7 +977,7 @@ def generate_quality_report() -> Dict[str, Any]:
         qa_report["final_quality_score"] = final_score
         qa_report["quality_approved"] = final_score >= 75
         
-        with open("quality_report.json", "w") as f:
+        with open(file_path("quality_report.json"), "w") as f:
             json.dump(qa_report, f, indent=2)
         
         return {"success": True, "qa_report": qa_report}
