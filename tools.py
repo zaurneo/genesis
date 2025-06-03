@@ -23,6 +23,21 @@ def file_path(name: str) -> str:
     """Return the absolute path for generated files."""
     return os.path.join(config.GENERATED_FILES_DIR, name)
 
+# Mapping of JSON files to the functions that generate them. This helps
+# pinpoint where a malformed JSON file might originate.
+JSON_FILE_GENERATORS = {
+    "tasks.json": "assign_task/update_task_status",
+    "feature_info.json": "clean_and_prepare_data",
+    "predictions.json": "train_prediction_model",
+    "latest_prediction.json": "make_predictions",
+    "evaluation.json": "evaluate_model_performance",
+    "backtest.json": "backtest_strategy",
+    "prediction_validation.json": "validate_predictions",
+    "test_report.json": "generate_test_report",
+    "quality_report.json": "generate_quality_report",
+    "data_report.json": "generate_data_report",
+}
+
 # =============================================================================
 # PROJECT OWNER TOOLS
 # =============================================================================
@@ -142,6 +157,40 @@ def update_task_status(task_id: str, status: str) -> Dict[str, Any]:
         json.dump(tasks, f, indent=2)
     
     return {"success": True, "task_id": task_id, "new_status": status}
+
+
+def validate_json_file(file_name: str) -> Dict[str, Any]:
+    """Validate that a JSON file is well formed and report errors."""
+    path = file_path(file_name)
+    if not os.path.exists(path):
+        return {"error": "File not found", "file": path}
+
+    with open(path, "r") as f:
+        content = f.read()
+
+    try:
+        json.loads(content)
+    except json.JSONDecodeError as e:
+        generator = JSON_FILE_GENERATORS.get(file_name)
+        return {
+            "error": "Invalid JSON",
+            "file": path,
+            "generator": generator,
+            "line": e.lineno,
+            "column": e.colno,
+            "message": e.msg,
+        }
+
+    stripped = content.rstrip()
+    if stripped and stripped[-1] not in ('}', ']'):  # catch trailing characters
+        generator = JSON_FILE_GENERATORS.get(file_name)
+        return {
+            "error": "JSON does not end with a closing bracket",
+            "file": path,
+            "generator": generator,
+        }
+
+    return {"success": True, "file": path}
 
 # =============================================================================
 # DATA ENGINEER TOOLS
