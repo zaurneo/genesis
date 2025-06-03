@@ -4,8 +4,9 @@ import asyncio
 from agents.agents import project_owner, data_engineer, model_executor, model_tester, quality_assurance
 from clients.clients import model_client_gpt4o as model_client
 from autogen_agentchat.conditions import TextMentionTermination
+import config
 
-project_path = "../genesis/newfiles/"
+project_path = config.GENERATED_FILES_DIR
 
 task = (
     f"Write a financial report on American Airlines."

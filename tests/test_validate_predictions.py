@@ -1,9 +1,14 @@
 import json
 import tempfile
+import os
+import config
 from tools import validate_predictions
 
 def test_validate_predictions_zero_train_mse(monkeypatch):
     with tempfile.TemporaryDirectory() as tmpdir:
+        generated_dir = os.path.join(tmpdir, "Generated_Files")
+        os.makedirs(generated_dir, exist_ok=True)
+        monkeypatch.setattr(config, "GENERATED_FILES_DIR", generated_dir, raising=False)
         monkeypatch.chdir(tmpdir)
         predictions = {
             "train_predictions": [1.0, 2.0, 3.0],
@@ -11,10 +16,10 @@ def test_validate_predictions_zero_train_mse(monkeypatch):
             "train_actual": [1.0, 2.0, 3.0],
             "test_actual": [1.0, 2.0, 3.0],
         }
-        with open("predictions.json", "w") as f:
+        with open(os.path.join(generated_dir, "predictions.json"), "w") as f:
             json.dump(predictions, f)
         feature_info = {"features": [], "target": "value"}
-        with open("feature_info.json", "w") as f:
+        with open(os.path.join(generated_dir, "feature_info.json"), "w") as f:
             json.dump(feature_info, f)
         result = validate_predictions()
         assert result.get("success")
