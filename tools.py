@@ -737,6 +737,14 @@ def validate_predictions() -> Dict[str, Any]:
         test_pred = np.array(predictions["test_predictions"])
         train_actual = np.array(predictions["train_actual"])
         test_actual = np.array(predictions["test_actual"])
+
+        # Compute error metrics
+        train_mse = float(mean_squared_error(train_actual, train_pred))
+        test_mse = float(mean_squared_error(test_actual, test_pred))
+        if train_mse == 0:
+            overfitting_ratio = float("inf")
+        else:
+            overfitting_ratio = test_mse / train_mse
         
         # Check for prediction quality issues
         validation_results = {
@@ -745,18 +753,19 @@ def validate_predictions() -> Dict[str, Any]:
             "prediction_range_reasonable": float(np.max(np.abs(test_pred))) < 1000,
             "no_constant_predictions": len(np.unique(test_pred)) > 1,
             "overfitting_check": {
-                "train_mse": float(mean_squared_error(train_actual, train_pred)),
-                "test_mse": float(mean_squared_error(test_actual, test_pred)),
-                "overfitting_ratio": float(mean_squared_error(test_actual, test_pred) / mean_squared_error(train_actual, train_pred))
+                "train_mse": train_mse,
+                "test_mse": test_mse,
+                "overfitting_ratio": overfitting_ratio
             }
         }
-        
+
         # Overall validation
         validation_results["all_checks_passed"] = all([
             validation_results["train_predictions_valid"],
             validation_results["test_predictions_valid"],
             validation_results["prediction_range_reasonable"],
             validation_results["no_constant_predictions"],
+            np.isfinite(validation_results["overfitting_check"]["overfitting_ratio"]) and
             validation_results["overfitting_check"]["overfitting_ratio"] < 10  # Not too much overfitting
         ])
         
