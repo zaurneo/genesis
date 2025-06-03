@@ -11,7 +11,8 @@ project_path = config.GENERATED_FILES_DIR
 
 task = (
     f"Write a financial report on American Airlines."
-    f"Save the final report in HTML file with clear explanations and visualizations for investors."
+    f"Save the final investment report in HTML file with clear explanations and visualizations for investors."
+    f"Investor report should be clear for investor to understand with good explanations of results, analysis and visualizations."
     f"All new files should be saved in `{project_path}`."
 )
 
