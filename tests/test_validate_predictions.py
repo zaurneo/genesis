@@ -11,10 +11,10 @@ def test_validate_predictions_zero_train_mse(monkeypatch):
         monkeypatch.setattr(config, "GENERATED_FILES_DIR", generated_dir, raising=False)
         monkeypatch.chdir(tmpdir)
         predictions = {
-            "train_predictions": [1.0, 2.0, 3.0],
+            "train_predictions": [1.1, 2.1, 3.1],
             "test_predictions": [1.0, 2.0, 3.0],
             "train_actual": [1.0, 2.0, 3.0],
-            "test_actual": [1.0, 2.0, 3.0],
+            "test_actual": [0.9, 1.9, 2.9],
         }
         with open(os.path.join(generated_dir, "predictions.json"), "w") as f:
             json.dump(predictions, f)
