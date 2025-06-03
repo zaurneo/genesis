@@ -38,6 +38,21 @@ JSON_FILE_GENERATORS = {
     "data_report.json": "generate_data_report",
 }
 
+def _convert_to_python_types(obj: Any) -> Any:
+    """Recursively convert numpy scalar types to native Python types."""
+    if isinstance(obj, dict):
+        return {k: _convert_to_python_types(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_convert_to_python_types(v) for v in obj]
+    # numpy scalars have an ``item`` method that returns the corresponding
+    # Python scalar (e.g. ``np.bool_`` -> ``bool``)
+    try:
+        if isinstance(obj, np.generic):
+            return obj.item()
+    except Exception:
+        pass
+    return obj
+
 # =============================================================================
 # PROJECT OWNER TOOLS
 # =============================================================================
@@ -1026,6 +1041,8 @@ def generate_quality_report() -> Dict[str, Any]:
         qa_report["final_quality_score"] = final_score
         qa_report["quality_approved"] = final_score >= 75
         
+        qa_report = _convert_to_python_types(qa_report)
+
         with open(file_path("quality_report.json"), "w") as f:
             json.dump(qa_report, f, indent=2)
         
