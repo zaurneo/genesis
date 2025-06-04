@@ -17,6 +17,15 @@ from prompts import (
 # backtest_strategy, validate_predictions, generate_test_report, check_data_quality, 
 # verify_model_outputs, assess_compliance, generate_quality_report
 
+code_execution_agent = AssistantAgent(
+    name="CodeExecutionAgent",
+    model_client=model_client,
+    tools = [],
+    system_message="THIS AGENT IS ONLY USED FOR EXECUTING CODE. DO NOT USE THIS AGENT FOR ANYTHING ELSE.",
+    code_execution_config={"work_dir": WORK_DIR},
+)
+
+
 project_owner = AssistantAgent(
     name="Project_Owner",
     model_client=model_client,
