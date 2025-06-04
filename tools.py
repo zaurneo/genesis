@@ -1,6 +1,6 @@
 from autogen_agentchat.agents import AssistantAgent
 from autogen_core.tools import FunctionTool
-from clients.clients import model_client_gpt4o as model_client
+from clients import model_client_gpt4o as model_client
 import pandas as pd
 import numpy as np
 import yfinance as yf

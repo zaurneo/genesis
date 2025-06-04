@@ -1,6 +1,6 @@
 from autogen_agentchat.agents import AssistantAgent
 from autogen_core.tools import FunctionTool
-from clients.clients import model_client_gpt4o as model_client
+from clients import model_client_gpt4o as model_client
 from tools import *
 # assign_task, check_progress, validate_completion, update_task_status, 
 # generate_html_report, load_stock_data, clean_and_prepare_data, 

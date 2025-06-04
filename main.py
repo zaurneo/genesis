@@ -2,7 +2,7 @@ from autogen_agentchat.teams import RoundRobinGroupChat
 from teams import OwnerMediationGroupChat
 from autogen_agentchat.ui import Console
 import asyncio
-from agents.agents import (
+from agents import (
     project_owner,
     data_engineer,
     model_executor,
@@ -10,7 +10,7 @@ from agents.agents import (
     quality_assurance,
     report_insight_generator,
 )
-from clients.clients import model_client_gpt4o as model_client
+from clients import model_client_gpt4o as model_client
 from autogen_agentchat.conditions import TextMentionTermination
 import config
 from tools import register_team
@@ -26,7 +26,7 @@ task = (
 
 async def main():
     text_termination = TextMentionTermination("GENESIS COMPLETED")
-    team = SelectorGroupChat([project_owner,data_engineer, model_executor, model_tester, quality_assurance,
+    team = RoundRobinGroupChat([project_owner,data_engineer, model_executor, model_tester, quality_assurance,
                               report_insight_generator],
                               termination_condition=text_termination,
     )
