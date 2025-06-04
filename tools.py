@@ -18,12 +18,25 @@ from sklearn.linear_model import LinearRegression
 import pickle
 import os
 import config
-from autogen_agentchat.agents import AssistantAgent
-from agents import code_execution_agent
+
+# Directory constants pulled from ``config`` so other modules only need to
+# import ``tools`` rather than ``config`` directly. These are defined before the
+# ``agents`` import so that the values are available when ``agents`` performs a
+# ``from tools import *`` during its import.
+WORK_DIR = config.WORK_DIR
+DOMAIN_KNOWLEDGE_DOCS_DIR = config.DOMAIN_KNOWLEDGE_DOCS_DIR
+DOMAIN_KNOWLEDGE_STORAGE_DIR = config.DOMAIN_KNOWLEDGE_STORAGE_DIR
+COMM_DIR = config.COMM_DIR
+
 
 # Additional imports for file management and knowledge retrieval
 from pprint import pprint
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:  # pragma: no cover - optional dependency for tests
+    def load_dotenv(*args, **kwargs):
+        pass
+
 load_dotenv()
 
 from prompts import ARCHIVE_AGENT_MATCH_DOMAIN_PROMPT
@@ -229,6 +242,8 @@ def save_multiple_files(file_paths: List[str], file_contents: List[str]) -> str:
 
 def execute_code_block(lang: str, code_block: str) -> str:
     """Execute a code block using ``code_execution_agent`` and return logs."""
+    from agents import code_execution_agent  # imported here to avoid circular imports during tests
+
     code_execution_agent._code_execution_config.pop("last_n_messages", None)
     exitcode, logs = code_execution_agent.execute_code_blocks([(lang, code_block)])
     status = "execution succeeded" if exitcode == 0 else "execution failed"
