@@ -2,6 +2,7 @@ from autogen_agentchat.agents import AssistantAgent
 from autogen_core.tools import FunctionTool
 from clients import model_client_gpt4o as model_client
 from tools import *
+import config
 from prompts import (
     PROJECT_OWNER_PROMPT,
     DATA_ENGINEER_PROMPT,
@@ -22,7 +23,7 @@ code_execution_agent = AssistantAgent(
     model_client=model_client,
     tools = [],
     system_message="THIS AGENT IS ONLY USED FOR EXECUTING CODE. DO NOT USE THIS AGENT FOR ANYTHING ELSE.",
-    code_execution_config={"work_dir": WORK_DIR},
+    code_execution_config={"work_dir": config.WORK_DIR},
 )
 
 
