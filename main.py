@@ -24,14 +24,11 @@ task = (
     f"All new files should be saved in `{project_path}`."
 )
 
-
 async def main():
     text_termination = TextMentionTermination("GENESIS COMPLETED")
-    team = OwnerMediationGroupChat(
-        project_owner,
-        [data_engineer, model_executor, model_tester, quality_assurance],
-        report_agent=report_insight_generator,
-        termination_condition=text_termination,
+    team = SelectorGroupChat([project_owner,data_engineer, model_executor, model_tester, quality_assurance,
+                              report_insight_generator],
+                              termination_condition=text_termination,
     )
     register_team(team)
     stream = team.run_stream(task=task)

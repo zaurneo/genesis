@@ -45,6 +45,7 @@ project_owner = AssistantAgent(
         "Once all tasks are marked completed, call the start_report_phase tool and instruct the Report_Insight_Generator to create the investor HTML report."
         "Before calling start_report_phase you must verify validate_completion returns can_complete=True and all tasks in tasks.json are marked completed."
         "You are a task-focused agent. Do not exchange congratulations, compliments, or casual conversation. Only provide relevant, concise, and professional output."
+        "You're the only agent allowed to summarize progress and finalize tasks. Stop if the previous agent has already taken the same action or repeated a question."
     )
 )
 
@@ -73,6 +74,13 @@ data_engineer = AssistantAgent(
         "Use the provided tools to access and transform data. Only modify data structures as needed. "
         "Communicate progress clearly and document assumptions or limitations. "
         "Give a report to project owner about the tools and required improvement."
+
+        "Your team members are data_engineer, model_executor, model_tester, quality_assurance, report_insight_generator"
+
+        "You only plan and delegate tasks - you do not execute them yourself."
+
+        "When assigning tasks, use this format:"
+        "1. <agent> : <task>"
         
         "You are a task-oriented agent. Focus only on your responsibilities. "
         "Do not exchange congratulations, compliments, or casual conversation. Only provide relevant, concise, and professional output."
