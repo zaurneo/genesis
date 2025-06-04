@@ -19,8 +19,45 @@ import pickle
 import os
 import config
 
+# Additional imports for file management and knowledge retrieval
+try:
+    import autogen
+except ImportError:  # Provide a minimal stub if autogen is unavailable
+    class _DummyAgent:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def execute_code_blocks(self, *args, **kwargs):
+            return 0, ""
+
+    class _DummyAutogen:
+        AssistantAgent = _DummyAgent
+
+    autogen = _DummyAutogen()
+from pprint import pprint
+try:
+    from dotenv import load_dotenv
+except ImportError:  # define a no-op if dotenv is not installed
+    def load_dotenv(*args, **kwargs):
+        return False
+from prompts import ARCHIVE_AGENT_MATCH_DOMAIN_PROMPT
+from utils.misc import light_gpt4_wrapper_autogen
+from utils.rag_tools import get_informed_answer
+from utils.search_tools import find_relevant_github_repo
+
+load_dotenv()
+
 # Reference to the active group chat so tools can control the conversation
 TEAM_CONTEXT = None
+
+# Default directories for various agent operations
+WORK_DIR = "working"
+DOMAIN_KNOWLEDGE_DOCS_DIR = "docs"
+DOMAIN_KNOWLEDGE_STORAGE_DIR = "storage"
+COMM_DIR = "url_search_results"
+
+# File path used by search utilities
+SEARCH_RESULTS_FILE = f"{COMM_DIR}/search_results.json"
 
 def register_team(team) -> None:
     """Register the running team for coordination tools."""
@@ -1135,4 +1172,256 @@ def calculate_rsi(prices: pd.Series, window: int = 14) -> pd.Series:
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
     return rsi
+
+
+# =============================================================================
+# GENERAL PURPOSE TOOLS
+# =============================================================================
+
+# Metadata describing the signature and purpose of each general purpose tool.
+agent_functions = [
+    {
+        "name": "read_file",
+        "description": "Reads a file and returns its contents.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": f"Path to the file relative to {WORK_DIR}.",
+                },
+            },
+            "required": ["file_path"],
+        },
+    },
+    {
+        "name": "read_multiple_files",
+        "description": "Reads multiple files and returns their contents.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": f"List of paths relative to {WORK_DIR}.",
+                },
+            },
+            "required": ["file_paths"],
+        },
+    },
+    {
+        "name": "read_directory_contents",
+        "description": "Return file names contained in a directory.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "directory_path": {
+                    "type": "string",
+                    "description": f"Directory relative to {WORK_DIR}.",
+                },
+            },
+            "required": ["directory_path"],
+        },
+    },
+    {
+        "name": "save_file",
+        "description": "Save a file to disk without overwriting existing files.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": f"Destination path relative to {WORK_DIR}.",
+                },
+                "file_contents": {
+                    "type": "string",
+                    "description": "Contents to write to the file.",
+                },
+            },
+            "required": ["file_path", "file_contents"],
+        },
+    },
+    {
+        "name": "save_multiple_files",
+        "description": "Save multiple files in one call without overwriting.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": f"List of paths relative to {WORK_DIR}.",
+                },
+                "file_contents": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of file contents matching file_paths.",
+                },
+            },
+            "required": ["file_paths", "file_contents"],
+        },
+    },
+    {
+        "name": "execute_code_block",
+        "description": "Execute a Python or bash code block and capture output.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "lang": {"type": "string", "description": "Language of the code"},
+                "code_block": {
+                    "type": "string",
+                    "description": "Code block to execute. If first line is '# filename: <name>' it will be saved.",
+                },
+            },
+            "required": ["lang", "code_block"],
+        },
+    },
+    {
+        "name": "consult_archive_agent",
+        "description": "Query the archive agent for domain specific information.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "domain_description": {
+                    "type": "string",
+                    "description": "Description of the target knowledge domain.",
+                },
+                "question": {
+                    "type": "string",
+                    "description": "Detailed question to ask the archive agent.",
+                },
+            },
+            "required": ["domain_description", "question"],
+        },
+    },
+]
+
+
+def read_file(file_path: str) -> str:
+    """Return the contents of ``file_path`` relative to ``WORK_DIR``."""
+    resolved_path = os.path.abspath(os.path.normpath(f"{WORK_DIR}/{file_path}"))
+    with open(resolved_path, "r") as f:
+        return f.read()
+
+
+def read_directory_contents(directory_path: str) -> List[str]:
+    """List all files in ``directory_path`` relative to ``WORK_DIR``."""
+    resolved_path = os.path.abspath(os.path.normpath(f"{WORK_DIR}/{directory_path}"))
+    return os.listdir(resolved_path)
+
+
+def read_multiple_files(file_paths: List[str]) -> List[str]:
+    """Read and return a list of file contents for each path provided."""
+    resolved_paths = [
+        os.path.abspath(os.path.normpath(f"{WORK_DIR}/{path}")) for path in file_paths
+    ]
+    contents = []
+    for path in resolved_paths:
+        with open(path, "r") as f:
+            contents.append(f.read())
+    return contents
+
+
+def save_file(file_path: str, file_contents: str) -> str:
+    """Create ``file_path`` relative to ``WORK_DIR`` with ``file_contents``."""
+    resolved_path = os.path.abspath(os.path.normpath(f"{WORK_DIR}/{file_path}"))
+    if os.path.exists(resolved_path):
+        raise Exception(f"File already exists at {resolved_path}.")
+
+    directory = os.path.dirname(resolved_path)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    with open(resolved_path, "w") as f:
+        f.write(file_contents)
+
+    return f"File saved to {resolved_path}."
+
+
+def save_multiple_files(file_paths: List[str], file_contents: List[str]) -> str:
+    """Save each item in ``file_contents`` to the matching path."""
+    resolved_paths = [
+        os.path.abspath(os.path.normpath(f"{WORK_DIR}/{path}")) for path in file_paths
+    ]
+
+    for path in resolved_paths:
+        if os.path.exists(path):
+            raise Exception(f"File already exists at {path}.")
+
+    for idx, path in enumerate(resolved_paths):
+        directory = os.path.dirname(path)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        with open(path, "w") as f:
+            f.write(file_contents[idx])
+
+    return f"Files saved to {resolved_paths}."
+
+
+# Agent dedicated to executing arbitrary code blocks
+code_execution_agent = autogen.AssistantAgent(
+    name="CodeExecutionAgent",
+    system_message="THIS AGENT IS ONLY USED FOR EXECUTING CODE. DO NOT USE THIS AGENT FOR ANYTHING ELSE.",
+    llm_config={"seed": 42, "config_list": [{"model": "gpt-4-1106-preview", "api_key": os.environ.get("OPENAI_API_KEY", "")}], "temperature": 0.1},
+    code_execution_config={"work_dir": WORK_DIR},
+)
+
+
+def execute_code_block(lang: str, code_block: str) -> str:
+    """Execute a code block using ``code_execution_agent`` and return logs."""
+    code_execution_agent._code_execution_config.pop("last_n_messages", None)
+    exitcode, logs = code_execution_agent.execute_code_blocks([(lang, code_block)])
+    status = "execution succeeded" if exitcode == 0 else "execution failed"
+    return f"exitcode: {exitcode} ({status})\nCode output: {logs}"
+
+
+def consult_archive_agent(domain_description: str, question: str) -> str:
+    """Consult the archive agent for a domain-specific answer."""
+    domain_descriptions = []
+    for root, dirs, files in os.walk(DOMAIN_KNOWLEDGE_DOCS_DIR):
+        for dir in dirs:
+            for file in os.listdir(os.path.join(root, dir)):
+                if file == "domain_description.txt":
+                    with open(os.path.join(root, dir, file), "r") as f:
+                        domain_descriptions.append({
+                            "domain_name": dir,
+                            "domain_description": f.read(),
+                        })
+        break
+
+    str_desc = ""
+    for desc in domain_descriptions:
+        str_desc += (
+            f"Domain: {desc['domain_name']}\n\nDescription:\n{'*' * 50}\n{desc['domain_description']}\n{'*' * 50}\n\n"
+        )
+
+    find_domain_query = ARCHIVE_AGENT_MATCH_DOMAIN_PROMPT.format(
+        domain_description=domain_description,
+        available_domains=str_desc,
+    )
+
+    domain_response = light_gpt4_wrapper_autogen(find_domain_query, return_json=True)
+    domain_response = domain_response.get("items", [])
+    domain_response = sorted(domain_response, key=lambda x: int(x.get("rating", 0)), reverse=True)
+
+    top_domain = domain_response[0] if domain_response else {"rating": 0}
+
+    DOMAIN_RESPONSE_THRESHOLD = 5
+    if top_domain.get("rating", 0) < DOMAIN_RESPONSE_THRESHOLD:
+        domain, domain_description = find_relevant_github_repo(domain_description)
+    else:
+        domain = top_domain.get("domain")
+        domain_description = top_domain.get("domain_description")
+
+    return get_informed_answer(
+        domain=domain,
+        domain_description=domain_description,
+        question=question,
+        docs_dir=DOMAIN_KNOWLEDGE_DOCS_DIR,
+        storage_dir=DOMAIN_KNOWLEDGE_STORAGE_DIR,
+        vector_top_k=80,
+        reranker_top_n=20,
+        rerank=True,
+        fusion=True,
+    )
 
