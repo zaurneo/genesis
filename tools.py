@@ -31,13 +31,9 @@ COMM_DIR = config.COMM_DIR
 
 # Additional imports for file management and knowledge retrieval
 from pprint import pprint
-try:
-    from dotenv import load_dotenv
-except ModuleNotFoundError:  # pragma: no cover - optional dependency for tests
-    def load_dotenv(*args, **kwargs):
-        pass
+from dotenv import load_dotenv
+load_dotenv() # Load environment variables from .env file
 
-load_dotenv()
 
 from prompts import ARCHIVE_AGENT_MATCH_DOMAIN_PROMPT
 from utils.misc import light_gpt4_wrapper_autogen

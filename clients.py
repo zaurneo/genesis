@@ -2,8 +2,10 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient
 import asyncio
 import openai
+import os
+from dotenv import load_dotenv
+load_dotenv() # Load environment variables from .env file
 
-from config import gpt_api_key, claude_api_key
 
 
 class OpenAIChatCompletionClientWithRetry(OpenAIChatCompletionClient):
@@ -26,11 +28,11 @@ class OpenAIChatCompletionClientWithRetry(OpenAIChatCompletionClient):
 
 model_client_gpt4o = OpenAIChatCompletionClientWithRetry(
     model="gpt-4o-2024-08-06",
-    api_key=gpt_api_key
+    api_key=os.environ["gpt_api_key"]
 )
 
 model_client_claude3s = AnthropicChatCompletionClient(
     model="claude-3-7-sonnet-20250219",
-    api_key=claude_api_key
+    api_key=os.environ["claude_api_key"] 
 )
 

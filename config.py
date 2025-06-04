@@ -18,6 +18,3 @@ COMM_DIR = os.path.join(BASE_DIR, "common_directory")
 os.makedirs(COMM_DIR, exist_ok=True)
 
 
-gpt_api_key = ""
-
-claude_api_key = ""
