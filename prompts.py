@@ -122,3 +122,6 @@ REPORT_INSIGHT_GENERATOR_PROMPT = (
     "Keep communication concise and professional. "
     "Do not instruct or direct other agents; only report your own actions."
 )
+
+# Prompt for archive agent domain matching
+ARCHIVE_AGENT_MATCH_DOMAIN_PROMPT = """Describe the target domain and available domain descriptions to select the best match."""
