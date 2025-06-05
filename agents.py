@@ -24,13 +24,14 @@ code_execution_agent = AssistantAgent(
 function_calling_agent = AssistantAgent(
     name="FunctionCallingAgent",
     system_message=FUNCTION_CALLING_AGENT_SYSTEM_PROMPT,
-    tools=[read_file,
-        read_multiple_files,
-        read_directory_contents,
-        save_file,
-        save_multiple_files,
-        execute_code_block,
-        consult_archive_agent
+    tools=[
+        # read_file,
+        # read_multiple_files,
+        # read_directory_contents,
+        # save_file,
+        # save_multiple_files,
+        # execute_code_block,
+        # consult_archive_agent
     ],
     model_client=model_client,
 )
@@ -123,11 +124,11 @@ project_owner = AssistantAgent(
     name="Project_Owner",
     model_client=model_client,
     tools=[
-        FunctionTool(assign_task, description="Assign tasks to specific agents"),
-        FunctionTool(check_progress, description="Check overall project progress"),
-        FunctionTool(validate_completion, description="Validate if project is ready for completion"),
-        FunctionTool(update_task_status, description="Update task status"),
-        FunctionTool(start_report_phase, description="Begin final report phase"),
+        # FunctionTool(assign_task, description="Assign tasks to specific agents"),
+        # FunctionTool(check_progress, description="Check overall project progress"),
+        # FunctionTool(validate_completion, description="Validate if project is ready for completion"),
+        # FunctionTool(update_task_status, description="Update task status"),
+        # FunctionTool(start_report_phase, description="Begin final report phase"),
     ],
     system_message=PROJECT_OWNER_PROMPT
 )
@@ -136,10 +137,10 @@ data_engineer = AssistantAgent(
     name="Data_Engineer",
     model_client=model_client,
     tools=[
-        FunctionTool(load_stock_data, description="Load stock data from yfinance"),
-        FunctionTool(clean_and_prepare_data, description="Clean and prepare data for modeling"),
-        FunctionTool(create_visualization, description="Create stock analysis charts"),
-        FunctionTool(generate_data_report, description="Generate data analysis report")
+        # FunctionTool(load_stock_data, description="Load stock data from yfinance"),
+        # FunctionTool(clean_and_prepare_data, description="Clean and prepare data for modeling"),
+        # FunctionTool(create_visualization, description="Create stock analysis charts"),
+        # FunctionTool(generate_data_report, description="Generate data analysis report")
     ],
     system_message=DATA_ENGINEER_PROMPT
 )
@@ -148,10 +149,10 @@ model_executor = AssistantAgent(
     name="Model_Executor",
     model_client=model_client,
     tools=[
-        FunctionTool(train_prediction_model, description="Train stock prediction models"),
-        FunctionTool(make_predictions, description="Make future stock predictions"),
-        FunctionTool(optimize_model, description="Optimize model parameters"),
-        FunctionTool(get_feature_importance, description="Extract feature importance from models")
+        # FunctionTool(train_prediction_model, description="Train stock prediction models"),
+        # FunctionTool(make_predictions, description="Make future stock predictions"),
+        # FunctionTool(optimize_model, description="Optimize model parameters"),
+        # FunctionTool(get_feature_importance, description="Extract feature importance from models")
     ],
     system_message=MODEL_EXECUTOR_PROMPT
 )
@@ -160,10 +161,10 @@ model_tester = AssistantAgent(
     name="Model_Tester",
     model_client=model_client,
     tools=[
-        FunctionTool(evaluate_model_performance, description="Evaluate model with metrics"),
-        FunctionTool(backtest_strategy, description="Backtest trading strategy based on predictions"),
-        FunctionTool(validate_predictions, description="Validate prediction quality"),
-        FunctionTool(generate_test_report, description="Generate comprehensive test report")
+        # FunctionTool(evaluate_model_performance, description="Evaluate model with metrics"),
+        # FunctionTool(backtest_strategy, description="Backtest trading strategy based on predictions"),
+        # FunctionTool(validate_predictions, description="Validate prediction quality"),
+        # FunctionTool(generate_test_report, description="Generate comprehensive test report")
     ],
     system_message=MODEL_TESTER_PROMPT
 )
@@ -174,10 +175,10 @@ quality_assurance = AssistantAgent(
     name="Quality_Assurance",
     model_client=model_client,
     tools=[
-        FunctionTool(check_data_quality, description="Check quality of all data files"),
-        FunctionTool(verify_model_outputs, description="Verify model outputs are valid"),
-        FunctionTool(assess_compliance, description="Assess compliance with requirements"),
-        FunctionTool(generate_quality_report, description="Generate final QA report")
+        # FunctionTool(check_data_quality, description="Check quality of all data files"),
+        # FunctionTool(verify_model_outputs, description="Verify model outputs are valid"),
+        # FunctionTool(assess_compliance, description="Assess compliance with requirements"),
+        # FunctionTool(generate_quality_report, description="Generate final QA report")
     ],
     system_message=QUALITY_ASSURANCE_PROMPT
 )
@@ -186,7 +187,7 @@ report_insight_generator = AssistantAgent(
     name="Report_Insight_Generator",
     model_client=model_client,
     tools=[
-        FunctionTool(generate_html_report, description="Compile final investor HTML report"),
+        # FunctionTool(generate_html_report, description="Compile final investor HTML report"),
     ],
     system_message=REPORT_INSIGHT_GENERATOR_PROMPT
     )
