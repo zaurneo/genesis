@@ -1,6 +1,7 @@
-from autogen_agentchat.agents import AssistantAgent
+from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
 from autogen_core.tools import FunctionTool
 from clients import model_client_gpt4o as model_client
+from autogen_agentchat.base import Handoff
 from genesis.utils.tools import *
 import config
 from prompts import *
@@ -21,7 +22,6 @@ code_execution_agent = AssistantAgent(
     code_execution_config={"work_dir": config.WORK_DIR},
 )
 
-
 function_calling_agent = AssistantAgent(
     name="FunctionCallingAgent",
     system_message=FUNCTION_CALLING_AGENT_SYSTEM_PROMPT,
@@ -33,7 +33,41 @@ function_calling_agent = AssistantAgent(
         execute_code_block,
         consult_archive_agent
     ],
+    model_client=model_client,
 )
+
+
+user_proxy = UserProxyAgent(
+    name = "user_proxy", 
+    input_func=input)
+
+user_handoff_agent = AssistantAgent(
+    name = "user_handoff_agent", 
+    system_message=USER_PROXY_SYSTEM_PROMPT,
+    handoffs=[Handoff(target="user", message="Transfer to user.")],
+    model_client=model_client,)
+
+
+code_reviewer = AssistantAgent(
+    name="CodeReviewer",
+    system_message="""You are an expert at reviewing code and suggesting improvements. 
+    Pay particluar attention to any potential syntax errors. 
+    Also, remind the Coding agent that they should always provide FULL and COMPLILABLE code and not shorten code blocks with comments such as '# Other class and method definitions remain unchanged...' or '# ... (previous code remains unchanged)'.""",
+    model_client=model_client,
+)
+
+agent_awareness_expert = AssistantAgent(
+    name="AgentAwarenessExpert",
+    system_message=AGENT_AWARENESS_SYSTEM_PROMPT,
+    model_client=model_client,
+)
+
+python_expert = AssistantAgent(
+    name="PythonExpert",
+    model_client=model_client,
+    system_message=PYTHON_EXPERT_SYSTEM_PROMPT,
+)
+
 
 creative_solution_agent = AssistantAgent(
     name="CreativeSolutionAgent",

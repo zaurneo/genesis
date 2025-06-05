@@ -11,7 +11,7 @@ from agents import (
     report_insight_generator,
 )
 from clients import model_client_gpt4o as model_client
-from autogen_agentchat.conditions import TextMentionTermination
+from autogen_agentchat.conditions import TextMentionTermination, HandoffTermination
 import config
 from genesis.utils.tools import register_team
 
@@ -26,8 +26,10 @@ task = (
 
 async def main():
     text_termination = TextMentionTermination("GENESIS COMPLETED")
+    handoff_termination = HandoffTermination(target="user")
     team = RoundRobinGroupChat([project_owner,data_engineer, model_executor, model_tester, quality_assurance,
                               report_insight_generator],
+                              # termination_condition=text_termination | handoff_termination,
                               termination_condition=text_termination,
     )
     register_team(team)

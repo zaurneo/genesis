@@ -1,8 +1,6 @@
 # System messages for each assistant agent
 
-NO_COMPLIMENTS = (
-    "Do not exchange congratulations, compliments, or casual conversation. Only provide relevant, concise, and professional output."
-)
+NO_COMPLIMENTS = "Do not exchange congratulations, compliments, or casual conversation. Only provide relevant, concise, and professional output."
 TASK_ORIENTED_AGENT = "You are a task-oriented agent. Focus only on your responsibilities."
 REPORT_TO_OWNER = "Give a report to project owner about the tools and required improvement."
 
