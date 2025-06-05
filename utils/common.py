@@ -295,12 +295,31 @@ def save_multiple_files(file_paths: List[str], file_contents: List[str]) -> str:
 
 
 def execute_code_block(lang: str, code_block: str) -> str:
-    """Execute a code block using ``code_execution_agent`` and return logs."""
+    """Execute a single code block and capture the execution logs.
+
+    The first line may specify a file to save the code to using the format
+    ``# filename: <name>``. In that case the code is written to the given
+    path relative to :data:`WORK_DIR` before executing.
+    """
+
     from agents import code_execution_agent  # imported here to avoid circular imports during tests
+
+    lines = code_block.splitlines()
+    save_path = None
+    resolved = ""
+    if lines and lines[0].lstrip().startswith("# filename:"):
+        save_path = lines[0].split(":", 1)[1].strip()
+        resolved = os.path.abspath(os.path.normpath(f"{WORK_DIR}/{save_path}"))
+        os.makedirs(os.path.dirname(resolved), exist_ok=True)
+        with open(resolved, "w") as f:
+            f.write("\n".join(lines[1:]))
+        # Remove the filename line when executing
+        code_block = "\n".join(lines[1:])
 
     code_execution_agent._code_execution_config.pop("last_n_messages", None)
     exitcode, logs = code_execution_agent.execute_code_blocks([(lang, code_block)])
     status = "execution succeeded" if exitcode == 0 else "execution failed"
-    return f"exitcode: {exitcode} ({status})\nCode output: {logs}"
+    prefix = f"Saved code to {resolved}\n" if save_path else ""
+    return f"{prefix}exitcode: {exitcode} ({status})\nCode output: {logs}"
 
 
