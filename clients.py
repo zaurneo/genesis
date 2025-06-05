@@ -3,8 +3,14 @@ from autogen_ext.models.anthropic import AnthropicChatCompletionClient
 import asyncio
 import openai
 import os
-from dotenv import load_dotenv
-load_dotenv() # Load environment variables from .env file
+try:
+    from dotenv import load_dotenv  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    def load_dotenv(*args, **kwargs):
+        """Fallback when python-dotenv is not installed."""
+        return False
+
+load_dotenv()  # Load environment variables from .env file when available
 
 
 
@@ -28,11 +34,11 @@ class OpenAIChatCompletionClientWithRetry(OpenAIChatCompletionClient):
 
 model_client_gpt4o = OpenAIChatCompletionClientWithRetry(
     model="gpt-4o-2024-08-06",
-    api_key=os.environ["gpt_api_key"]
+    api_key=os.environ.get("gpt_api_key", "")
 )
 
 model_client_claude3s = AnthropicChatCompletionClient(
     model="claude-3-7-sonnet-20250219",
-    api_key=os.environ["claude_api_key"] 
+    api_key=os.environ.get("claude_api_key", "")
 )
 

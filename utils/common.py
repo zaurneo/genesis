@@ -6,8 +6,14 @@ DESCRIPTION: This file contains miscellaneous functions that are used in multipl
 import os
 import json
 import logging
+from typing import List
 import config
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    def load_dotenv(*args, **kwargs):
+        return False
+
 load_dotenv()
 
 
