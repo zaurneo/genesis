@@ -136,9 +136,6 @@ Do not instruct or direct other agents; only report your own actions.
 ARCHIVE_AGENT_MATCH_DOMAIN_PROMPT = f"""Describe the target domain and available domain descriptions to select the best
 match."""
 
-"""
-This file containts system prompts for various agents.
-"""
 
 USER_PROXY_SYSTEM_PROMPT = f"""
 You are a proxy for the user. You will be able to see the conversation between the assistants. You will ONLY be prompted when
@@ -160,7 +157,7 @@ making sure that suggested actions align with your knowledge. Specifically, you 
     referred to as the latent space. Activating the latent space of an LLM requires the correct series of words as inputs,
     creating a useful internal state of the neural network. This process is similar to how the right cues can prime a human mind
     to think in a certain way. By understanding and utilizing this associative nature and latent space, you can effectively
-    leverage LLMs for various applications​​.
+    leverage LLMs for various applications.
         - CODE EXECUTION: If a code block needs executing, the FunctionCallingAgent should call "execute_code_block".
         - READING FILES: Agents cannot "read" (i.e know the contents of) a file unless the file contents are printed to the
     console and added to the agent conversation history. When analyzing/evaluating code (or any other file), it is IMPORTANT to

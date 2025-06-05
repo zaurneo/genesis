@@ -3,14 +3,9 @@ from autogen_core.tools import FunctionTool
 from clients import model_client_gpt4o as model_client
 from genesis.utils.tools import *
 import config
-from prompts import (
-    PROJECT_OWNER_PROMPT,
-    DATA_ENGINEER_PROMPT,
-    MODEL_EXECUTOR_PROMPT,
-    MODEL_TESTER_PROMPT,
-    QUALITY_ASSURANCE_PROMPT,
-    REPORT_INSIGHT_GENERATOR_PROMPT,
-)
+from prompts import *
+from utils.common import *
+
 # assign_task, check_progress, validate_completion, update_task_status, 
 # generate_html_report, load_stock_data, clean_and_prepare_data, 
 # create_visualization, generate_data_report, train_prediction_model, 
@@ -25,6 +20,81 @@ code_execution_agent = AssistantAgent(
     system_message="THIS AGENT IS ONLY USED FOR EXECUTING CODE. DO NOT USE THIS AGENT FOR ANYTHING ELSE.",
     code_execution_config={"work_dir": config.WORK_DIR},
 )
+
+
+function_calling_agent = AssistantAgent(
+    name="FunctionCallingAgent",
+    system_message=FUNCTION_CALLING_AGENT_SYSTEM_PROMPT,
+    tools=[read_file,
+        read_multiple_files,
+        read_directory_contents,
+        save_file,
+        save_multiple_files,
+        execute_code_block,
+        consult_archive_agent
+    ],
+)
+
+creative_solution_agent = AssistantAgent(
+    name="CreativeSolutionAgent",
+    system_message=CREATIVE_SOLUTION_AGENT_SYSTEM_PROMPT,
+    model_client=model_client,
+)
+
+out_of_the_box_thinker_agent = AssistantAgent(
+    name="OutOfTheBoxThinkerAgent",
+    system_message=OUT_OF_THE_BOX_THINKER_SYSTEM_PROMPT,
+    model_client=model_client,
+)
+
+agi_gestalt_agent = AssistantAgent(
+    name="AGIGestaltAgent",
+    system_message=AGI_GESTALT_SYSTEM_PROMPT,
+    model_client=model_client,
+)
+
+project_manager_agent = AssistantAgent(
+    name="ProjectManagerAgent",
+    system_message=PROJECT_MANAGER_SYSTEM_PROMPT,
+    model_client=model_client,
+)
+
+first_principles_thinker_agent = AssistantAgent(
+    name="FirstPrinciplesThinkerAgent",
+    system_message=FIRST_PRINCIPLES_THINKER_SYSTEM_PROMPT,
+    model_client=model_client,
+)
+
+strategic_planning_agent = AssistantAgent(
+    name="StrategicPlanningAgent",
+    system_message=STRATEGIC_PLANNING_AGENT_SYSTEM_PROMPT,
+    model_client=model_client,
+)
+
+emotional_intelligence_expert_agent = AssistantAgent(
+    name="EmotionalIntelligenceExpertAgent",
+    system_message=EMOTIONAL_INTELLIGENCE_EXPERT_SYSTEM_PROMPT,
+    model_client=model_client,
+)
+
+efficiency_optimizer_agent = AssistantAgent(
+    name="EfficiencyOptimizerAgent",
+    system_message=EFFICIENCY_OPTIMIZER_SYSTEM_PROMPT,
+    model_client=model_client,
+)
+
+task_history_review_agent = AssistantAgent(
+    name="TaskHistoryReviewAgent",
+    system_message=TASK_HISTORY_REVIEW_AGENT_SYSTEM_PROMPT,
+    model_client=model_client,
+)
+
+task_comprehension_agent = AssistantAgent(
+    name="TaskComprehensionAgent",
+    system_message=TASK_COMPREHENSION_AGENT_SYSTEM_PROMPT,
+    model_client=model_client,
+)
+
 
 
 project_owner = AssistantAgent(
