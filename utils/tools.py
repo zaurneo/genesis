@@ -2,6 +2,7 @@ from autogen_agentchat.agents import AssistantAgent
 from autogen_core.tools import FunctionTool
 from clients import model_client_gpt4o as model_client
 from utils.common import file_path
+from utils.rag_tools import consult_archive_agent
 import pandas as pd
 import numpy as np
 import yfinance as yf
