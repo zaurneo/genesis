@@ -13,3 +13,19 @@ before all tasks are marked completed will result in an error. The report agent
 will refuse to generate the HTML summary unless the report phase has been
 activated. Once active, the agent compiles `investor_report.html` using all
 generated data and evaluations so investors receive a clear, structured summary.
+
+## Environment Variables and Domain Knowledge
+
+Several environment variables configure API access and where domain knowledge is stored:
+
+- `gpt_api_key` – OpenAI API key.
+- `claude_api_key` – Anthropic API key.
+- `DOMAIN_KNOWLEDGE_DOCS_DIR` – directory containing domain descriptions (defaults to `knowledge/input`).
+- `DOMAIN_KNOWLEDGE_STORAGE_DIR` – directory used to store indexed domain knowledge (defaults to `knowledge/output`).
+- `GITHUB_TOKEN` – optional token for authenticated GitHub API requests used by `find_relevant_github_repo`.
+
+Domain descriptions should be organised with the following layout:
+
+```
+knowledge/input/<domain>/domain_description.txt
+```
