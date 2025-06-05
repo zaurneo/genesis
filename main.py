@@ -6,7 +6,10 @@ from agents import *
 from clients import model_client_gpt4o as model_client
 from autogen_agentchat.conditions import TextMentionTermination, HandoffTermination
 import config
+
 from utils.tools import register_team
+from utils.common import log_stream
+
 
 project_path = config.GENERATED_FILES_DIR
 
@@ -48,7 +51,8 @@ async def main():
     )
     register_team(team)
     stream = team.run_stream(task=task)
-    await Console(stream)
+    logged_stream = log_stream(stream)
+    await Console(logged_stream)
     await model_client.close()
 
 if __name__ == "__main__":
