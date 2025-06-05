@@ -1,6 +1,7 @@
 from autogen_agentchat.agents import AssistantAgent
 from autogen_core.tools import FunctionTool
 from clients import model_client_gpt4o as model_client
+from utils.common import file_path
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -27,8 +28,14 @@ import config
 
 # Additional imports for file management and knowledge retrieval
 from pprint import pprint
-from dotenv import load_dotenv
-load_dotenv() # Load environment variables from .env file
+try:
+    from dotenv import load_dotenv  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    def load_dotenv(*args, **kwargs):
+        """Fallback when python-dotenv is missing."""
+        return False
+
+load_dotenv()  # Load environment variables from .env file when available
 
 
 
