@@ -69,15 +69,9 @@ python_expert = AssistantAgent(
 )
 
 
-creative_solution_agent = AssistantAgent(
-    name="CreativeSolutionAgent",
-    system_message=CREATIVE_SOLUTION_AGENT_SYSTEM_PROMPT,
-    model_client=model_client,
-)
-
-out_of_the_box_thinker_agent = AssistantAgent(
-    name="OutOfTheBoxThinkerAgent",
-    system_message=OUT_OF_THE_BOX_THINKER_SYSTEM_PROMPT,
+innovative_thinker_agent = AssistantAgent(
+    name="InnovativeThinkerAgent",
+    system_message=INNOVATIVE_THINKER_SYSTEM_PROMPT,
     model_client=model_client,
 )
 
@@ -87,9 +81,9 @@ agi_gestalt_agent = AssistantAgent(
     model_client=model_client,
 )
 
-project_manager_agent = AssistantAgent(
-    name="ProjectManagerAgent",
-    system_message=PROJECT_MANAGER_SYSTEM_PROMPT,
+project_strategy_manager_agent = AssistantAgent(
+    name="ProjectStrategyManagerAgent",
+    system_message=PROJECT_STRATEGY_MANAGER_SYSTEM_PROMPT,
     model_client=model_client,
 )
 
@@ -99,11 +93,6 @@ first_principles_thinker_agent = AssistantAgent(
     model_client=model_client,
 )
 
-strategic_planning_agent = AssistantAgent(
-    name="StrategicPlanningAgent",
-    system_message=STRATEGIC_PLANNING_AGENT_SYSTEM_PROMPT,
-    model_client=model_client,
-)
 
 emotional_intelligence_expert_agent = AssistantAgent(
     name="EmotionalIntelligenceExpertAgent",

@@ -13,3 +13,10 @@ before all tasks are marked completed will result in an error. The report agent
 will refuse to generate the HTML summary unless the report phase has been
 activated. Once active, the agent compiles `investor_report.html` using all
 generated data and evaluations so investors receive a clear, structured summary.
+
+## Agent Roles
+
+- `InnovativeThinkerAgent` merges creative solution generation with out-of-the-box
+  perspectives to inspire unique approaches.
+- `ProjectStrategyManagerAgent` combines classic project management with long-term
+  strategic planning to keep tasks on schedule and aligned with overall goals.
