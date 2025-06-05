@@ -3,7 +3,7 @@ import json
 import tempfile
 import types
 import config
-from tools import register_team, start_report_phase, generate_html_report
+from utils.tools import register_team, start_report_phase, generate_html_report
 
 class DummyTeam:
     def __init__(self):

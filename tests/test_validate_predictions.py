@@ -2,7 +2,7 @@ import json
 import tempfile
 import os
 import config
-from tools import validate_predictions
+from utils.tools import validate_predictions
 
 def test_validate_predictions_zero_train_mse(monkeypatch):
     with tempfile.TemporaryDirectory() as tmpdir:

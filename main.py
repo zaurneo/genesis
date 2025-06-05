@@ -13,7 +13,7 @@ from agents import (
 from clients import model_client_gpt4o as model_client
 from autogen_agentchat.conditions import TextMentionTermination
 import config
-from tools import register_team
+from genesis.utils.tools import register_team
 
 project_path = config.GENERATED_FILES_DIR
 

@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 import config
-from tools import validate_json_file
+from utils.tools import validate_json_file
 
 
 def setup_tmpdir(monkeypatch):
