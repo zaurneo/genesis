@@ -161,6 +161,53 @@ def save_json(data, filename):
         json.dump(data, file, indent=4, ensure_ascii=False)
 
 
+def save_communication_log(
+    messages: List[dict], file_name: str = "conversation_log.jsonl"
+) -> dict:
+    """Save a sequence of chat messages to ``file_name`` in ``GENERATED_FILES_DIR``.
+
+    The log is stored using newline-delimited JSON so that each message can be
+    easily parsed while keeping the file size manageable for long runs.
+
+    Parameters
+    ----------
+    messages:
+        A list of dictionaries representing the conversation. Each dictionary
+        should include at least ``speaker`` and ``content`` keys, but arbitrary
+        additional metadata is allowed.
+    file_name:
+        Destination file name relative to :data:`GENERATED_FILES_DIR`.
+
+    Returns
+    -------
+    dict
+        Information about the saved log or an error message.
+    """
+    path = file_path(file_name)
+    try:
+        with open(path, "w") as f:
+            for msg in messages:
+                f.write(json.dumps(msg, ensure_ascii=False) + "\n")
+        return {"success": True, "file": path, "messages_saved": len(messages)}
+    except Exception as e:  # pragma: no cover - unexpected file errors
+        return {"error": f"Failed to save conversation log: {str(e)}"}
+
+
+async def log_stream(
+    stream: 'AsyncIterable[dict]', file_name: str = "conversation_log.jsonl"
+) -> 'AsyncIterator[dict]':
+    """Yield items from ``stream`` while logging them to ``file_name``.
+
+    Each message from ``stream`` is written to ``file_name`` as newline-delimited
+    JSON. The file lives inside :data:`GENERATED_FILES_DIR`.
+    """
+    path = file_path(file_name)
+    with open(path, "w") as f:
+        async for msg in stream:
+            f.write(json.dumps(msg, ensure_ascii=False) + "\n")
+            yield msg
+
+
 
 
 
