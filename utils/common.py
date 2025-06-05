@@ -363,7 +363,12 @@ def execute_code_block(lang: str, code_block: str) -> str:
         # Remove the filename line when executing
         code_block = "\n".join(lines[1:])
 
-    code_execution_agent._code_execution_config.pop("last_n_messages", None)
+    # Some versions of ``AssistantAgent`` do not expose ``_code_execution_config``
+    # so we guard against its absence before attempting to modify it. This keeps
+    # ``execute_code_block`` compatible with both old and new implementations of
+    # the agent.
+    if hasattr(code_execution_agent, "_code_execution_config"):
+        code_execution_agent._code_execution_config.pop("last_n_messages", None)
     exitcode, logs = code_execution_agent.execute_code_blocks([(lang, code_block)])
     status = "execution succeeded" if exitcode == 0 else "execution failed"
     prefix = f"Saved code to {resolved}\n" if save_path else ""
