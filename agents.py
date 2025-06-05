@@ -2,7 +2,7 @@ from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
 from autogen_core.tools import FunctionTool
 from clients import model_client_gpt4o as model_client
 from autogen_agentchat.base import Handoff
-from genesis.utils.tools import *
+from utils.tools import *
 import config
 from prompts import *
 from utils.common import *
@@ -19,7 +19,6 @@ code_execution_agent = AssistantAgent(
     model_client=model_client,
     tools = [],
     system_message="THIS AGENT IS ONLY USED FOR EXECUTING CODE. DO NOT USE THIS AGENT FOR ANYTHING ELSE.",
-    code_execution_config={"work_dir": config.WORK_DIR},
 )
 
 function_calling_agent = AssistantAgent(
