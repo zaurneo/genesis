@@ -31,7 +31,9 @@ def save_communication_log(messages):
         md_path = os.path.join(config.GENERATED_FILES_DIR, "conversation_log.md")
         with open(jsonl_path, "w", encoding="utf-8") as jf, open(md_path, "w", encoding="utf-8") as mf:
             for msg in messages:
-                json.dump(msg, jf)
+                content = msg.get("content", "").replace("\\n", "\n")
+                print(f"{msg.get('role', 'unknown')}: {content}\n")
+                # json.dump(msg, jf)
                 jf.write("\n")
                 _write_markdown_message(mf, msg)
         return {"success": True, "path": jsonl_path, "md_path": md_path}
