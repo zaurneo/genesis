@@ -1,58 +1,9 @@
 from autogen_agentchat.teams import RoundRobinGroupChat
 
-
-class OwnerMediationGroupChat(RoundRobinGroupChat):
-    """Round-robin chat where the project owner mediates every exchange."""
-
-    def __init__(self, owner, agents, report_agent=None, **kwargs):
-        self.owner = owner
-        self.agents = list(agents)
-        self.report_agent = report_agent
-        self.report_phase = False
-
-        # Build the mediation order: owner -> agent -> owner -> next agent -> ...
-        order = []
-        for agent in self.agents:
-            order.extend([owner, agent])
-        order.append(owner)
-
-        # Save order and index for the custom speaker selector
-        self._order = order
-        self._idx = 0
-
-        # Initialize parent with unique participants
-        participants = [owner] + self.agents
-        if self.report_agent:
-            participants.append(self.report_agent)
-        # Older versions of ``autogen`` do not accept ``speaker_selection_method``
-        # in ``RoundRobinGroupChat.__init__``. We therefore call the parent
-        # initializer without it and set the speaker selection method
-        # afterwards for compatibility.
-        super().__init__(participants, **kwargs)
-
-        # Set the speaker selection hook if supported
-        if hasattr(self, "speaker_selection_method"):
-            self.speaker_selection_method = self._select_next
-        else:
-            # Fallback for APIs that use a different attribute name
-            setattr(self, "select_speaker", self._select_next)
-
-    def _select_next(self, last_speaker=None):
-        speaker = self._order[self._idx]
-        self._idx = (self._idx + 1) % len(self._order)
-        return speaker
-
-
-
-
 import logging
 from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass
 from datetime import datetime
-
-logging.getLogger("autogen").setLevel(logging.WARNING)
-logging.getLogger("autogen.agentchat").setLevel(logging.WARNING)
-logging.getLogger("autogen_agentchat").setLevel(logging.WARNING)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -96,7 +47,8 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
     with comprehensive task management and logging.
     """
     
-    def __init__(self, owner, agents, max_agent_turns=5, report_agent=None, tasks=None, **kwargs):
+    def __init__(self, owner, agents, max_agent_turns=5, report_agent=None, tasks=None, 
+                 format_agent_output=True, show_agent_messages=True, **kwargs):
         # Validation
         self._validate_inputs(owner, agents)
         
@@ -114,6 +66,8 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
         
         self.max_agent_turns = max_agent_turns
         self.report_agent = report_agent
+        self.format_agent_output = format_agent_output
+        self.show_agent_messages = show_agent_messages
         
         # Task management
         self.tasks = tasks if tasks else []
@@ -132,6 +86,7 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
         self._force_owner_next = False
         self._current_handoff_status = True  # Default to True
         self._handoff_info = None  # Store handoff details for next turn
+        self._output_mode = 'formatted'  # Default output mode
         
         # Build participants - ensure no duplicates
         participants = [owner]
@@ -305,6 +260,10 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
             self.last_speaker = last_speaker
             self._update_conversation_tracking(last_speaker, messages)
         
+        # Format and display the last message if available
+        if messages and len(messages) > 0:
+            self._format_agent_output(last_speaker, messages[-1])
+        
         # Determine next speaker based on current state
         next_speaker = self._determine_next_speaker()
         
@@ -460,7 +419,136 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
         
         return None, None
 
-    def _handle_owner_turn(self):
+    def _format_agent_output(self, speaker, message):
+        """Format and display agent output in a more readable way."""
+        if not self.show_agent_messages:
+            return
+            
+        if not message or not hasattr(message, 'content'):
+            return
+        
+        agent_name = getattr(speaker, 'name', str(speaker))
+        content = message.content
+        
+        # Handle summary mode
+        if self._output_mode == 'summary':
+            summary = self._create_message_summary(content)
+            print(f"\n💬 {agent_name} (summary): {summary}\n")
+            return
+        
+        # Skip formatting for very short messages
+        if len(content) < 100:
+            print(f"\n💬 {agent_name}: {content}\n")
+            return
+        
+        if not self.format_agent_output or self._output_mode == 'minimal':
+            # Simple output without formatting
+            print(f"\n💬 {agent_name}:")
+            print(content)
+            print()
+            return
+        
+        # Formatted output
+        print("\n" + "╔" + "═"*58 + "╗")
+        print(f"║ 💬 {agent_name:<52} ║")
+        print("╠" + "═"*58 + "╣")
+        
+        # Split content into sections
+        lines = content.split('\n')
+        
+        for line in lines:
+            if not line.strip():
+                continue
+                
+            # Detect section headers (lines ending with **)
+            if line.strip().endswith('**'):
+                print("║" + " "*58 + "║")
+                print(f"║ 📌 {line.strip():<52} ║")
+                print("║" + " "*58 + "║")
+            # Detect bullet points or numbered items
+            elif line.strip().startswith(('- ', '* ', '1.', '2.', '3.')):
+                # Wrap long bullet points
+                wrapped = self._wrap_text(line.strip(), 54)
+                for i, wrapped_line in enumerate(wrapped):
+                    if i == 0:
+                        print(f"║   {wrapped_line:<54} ║")
+                    else:
+                        print(f"║     {wrapped_line:<52} ║")
+            # Regular text
+            else:
+                wrapped = self._wrap_text(line.strip(), 56)
+                for wrapped_line in wrapped:
+                    print(f"║ {wrapped_line:<56} ║")
+        
+        print("╚" + "═"*58 + "╝")
+        print()
+    
+    def _create_message_summary(self, content, max_length=200):
+        """Create a summary of long agent messages."""
+        if len(content) <= max_length:
+            return content
+        
+        # Extract key points
+        lines = content.split('\n')
+        key_points = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            # Look for section headers or important points
+            if any(marker in line for marker in ['**', 'Step', 'Tool:', 'Objective:', 'Required:']):
+                key_points.append(line.replace('*', '').strip())
+        
+        if key_points:
+            summary = "Key points: " + "; ".join(key_points[:3])
+            if len(key_points) > 3:
+                summary += f" (+ {len(key_points) - 3} more points)"
+        else:
+            # Fallback to first few sentences
+            summary = content[:max_length] + "..."
+        
+        return summary
+    
+    def set_output_mode(self, mode='full'):
+        """Set output mode: 'full', 'formatted', 'summary', or 'minimal'."""
+        if mode == 'full':
+            self.format_agent_output = True
+            self.show_agent_messages = True
+            self._output_mode = 'full'
+        elif mode == 'formatted':
+            self.format_agent_output = True
+            self.show_agent_messages = True
+            self._output_mode = 'formatted'
+        elif mode == 'summary':
+            self.format_agent_output = False
+            self.show_agent_messages = True
+            self._output_mode = 'summary'
+        elif mode == 'minimal':
+            self.format_agent_output = False
+            self.show_agent_messages = False
+            self._output_mode = 'minimal'
+        else:
+            raise ValueError("Mode must be 'full', 'formatted', 'summary', or 'minimal'")
+        """Wrap text to specified width."""
+        words = text.split()
+        lines = []
+        current_line = []
+        current_length = 0
+        
+        for word in words:
+            if current_length + len(word) + 1 > width:
+                lines.append(' '.join(current_line))
+                current_line = [word]
+                current_length = len(word)
+            else:
+                current_line.append(word)
+                current_length += len(word) + 1
+        
+        if current_line:
+            lines.append(' '.join(current_line))
+        
+        return lines if lines else ['']
         """Handle owner's turn - typically providing guidance or new tasks."""
         print("\n" + "="*60)
         print("👑 OWNER INTERVENTION")

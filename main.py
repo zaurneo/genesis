@@ -1,5 +1,5 @@
 from autogen_agentchat.teams import RoundRobinGroupChat
-from teams import OwnerMediationGroupChat, FlexibleHandoffGroupChat
+from teams import FlexibleHandoffGroupChat
 from autogen_agentchat.ui import Console
 import asyncio
 from agents import *
@@ -47,22 +47,42 @@ agents = [
                                 report_insight_generator]
 
 async def main():
+    import logging
+    logging.getLogger("autogen").setLevel(logging.WARNING)
+    logging.getLogger("autogen_agentchat").setLevel(logging.WARNING)
+    
     text_termination = TextMentionTermination("GENESIS COMPLETED")
-    # handoff_termination = HandoffTermination(target="user")
-    # team = RoundRobinGroupChat(agents,
-    #                           # termination_condition=text_termination | handoff_termination,
-    #                           termination_condition=text_termination,
-    # )
+    handoff_termination = HandoffTermination(target="user")
+    
+    # Show output mode options
+    print("\n" + "="*60)
+    print("🎨 OUTPUT MODE OPTIONS:")
+    print("="*60)
+    print("1. 'full'      - Full formatted agent messages")
+    print("2. 'formatted' - Nicely boxed agent messages (default)")
+    print("3. 'summary'   - One-line summaries of agent work")
+    print("4. 'minimal'   - Only show turn tracking")
+    print("="*60 + "\n")
 
+    owner = project_owner
 
+    
     team = FlexibleHandoffGroupChat(
-        owner=project_owner,
+        owner=owner,
         agents=agents,
         max_agent_turns=4,  # Owner intervenes after 4 agent exchanges
-        report_agent=report_insight_generator,  # Optional: designate report agent
+        # report_agent=report_insight_generator,  # Optional: designate report agent
         tasks=task,  # Pass the tasks
+        format_agent_output=True,  # Enable formatted output
+        show_agent_messages=True,  # Show agent messages
         termination_condition=text_termination,
     )
+
+    
+
+    team.set_output_mode('summary') # or formatted
+
+
 
     # register_team(team)
     stream = team.run_stream(task=task)
@@ -70,6 +90,19 @@ async def main():
     # await Console(logged_stream)
     await Console(stream)
     await model_client.close()
+
+
+    team.export_turn_logs(f"{project_path}/turn_logs.txt")
+
+    # Print summary
+    print("\n" + "="*60)
+    print("FINAL SUMMARY")
+    print("="*60)
+    print(team.get_turn_logs_summary())
+    print(f"\nTotal owner interventions: {team.owner_intervention_count}")
+    print(f"Turn logs saved to: {project_path}/turn_logs.txt")
+
+
 
 if __name__ == "__main__":
     asyncio.run(main())
