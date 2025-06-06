@@ -50,6 +50,10 @@ from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass
 from datetime import datetime
 
+logging.getLogger("autogen").setLevel(logging.WARNING)
+logging.getLogger("autogen.agentchat").setLevel(logging.WARNING)
+logging.getLogger("autogen_agentchat").setLevel(logging.WARNING)
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -97,7 +101,17 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
         self._validate_inputs(owner, agents)
         
         self.owner = owner
-        self.agents = list(agents)
+        
+        # Remove duplicates from agents while preserving order
+        seen = set()
+        unique_agents = []
+        for agent in agents:
+            agent_name = getattr(agent, 'name', str(agent))
+            if agent_name not in seen:
+                seen.add(agent_name)
+                unique_agents.append(agent)
+        self.agents = unique_agents
+        
         self.max_agent_turns = max_agent_turns
         self.report_agent = report_agent
         
@@ -119,10 +133,22 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
         self._current_handoff_status = True  # Default to True
         self._handoff_info = None  # Store handoff details for next turn
         
-        # Build participants
-        participants = [owner] + self.agents
+        # Build participants - ensure no duplicates
+        participants = [owner]
+        participant_names = {getattr(owner, 'name', str(owner))}
+        
+        for agent in self.agents:
+            agent_name = getattr(agent, 'name', str(agent))
+            if agent_name not in participant_names:
+                participants.append(agent)
+                participant_names.add(agent_name)
+        
+        # Add report agent if not already in participants
         if self.report_agent:
-            participants.append(self.report_agent)
+            report_name = getattr(self.report_agent, 'name', str(self.report_agent))
+            if report_name not in participant_names:
+                participants.append(self.report_agent)
+                participant_names.add(report_name)
         
         super().__init__(participants, **kwargs)
         self._setup_speaker_selection()
@@ -134,15 +160,24 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
         
         if not hasattr(owner, 'name'):
             raise ValueError("Owner must have a 'name' attribute")
-            
-        if owner in agents:
+        
+        # Check for owner in agents by comparing names
+        owner_name = getattr(owner, 'name', str(owner))
+        agent_names = [getattr(agent, 'name', str(agent)) for agent in agents]
+        
+        if owner_name in agent_names:
             raise ValueError("Owner cannot be included in agents list")
+        
+        # Check for duplicate agent names
+        if len(agent_names) != len(set(agent_names)):
+            raise ValueError("Agent names must be unique")
         
         if len(agents) < 2:
             raise ValueError("Need at least 2 agents for handoff functionality")
 
     def _setup_speaker_selection(self):
         """Setup speaker selection method - handles different base class APIs."""
+        # Try different possible method names the base class might use
         possible_methods = ['speaker_selection_method', 'select_speaker', 'next_speaker_selector']
         
         for method_name in possible_methods:
@@ -150,6 +185,7 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
                 setattr(self, method_name, self._select_next_speaker)
                 return
         
+        # Fallback: set the most common one
         self.speaker_selection_method = self._select_next_speaker
 
     def set_tasks(self, tasks: List[Task]):
@@ -345,6 +381,17 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
         # Default to first agent if no specific tasks
         return self.agents[0]
 
+    def _select_next_agent(self):
+        """Select the next agent when allowing agent-to-agent handoff."""
+        # Simple round-robin among agents (can be enhanced with smarter logic)
+        if self.last_speaker in self.agents:
+            current_idx = self.agents.index(self.last_speaker)
+            next_idx = (current_idx + 1) % len(self.agents)
+            return self.agents[next_idx]
+        else:
+            # Fallback to first agent
+            return self.agents[0]
+
     def _simulate_agent_turn(self, agent):
         """Simulate an agent's turn with task management."""
         handoff_from = self._handoff_info.get('from') if self._handoff_info else None
@@ -465,6 +512,129 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
         
         return True, f"Handoff approved: {getattr(from_agent, 'name', str(from_agent))} → {getattr(to_agent, 'name', str(to_agent))}"
 
+    def force_owner_intervention(self, reason=None):
+        """Force an immediate owner intervention."""
+        self._force_owner_next = True
+        
+        self.conversation_history.append({
+            'type': 'forced_intervention',
+            'reason': reason,
+            'turn_number': len(self.conversation_history) + 1
+        })
+        return self.owner
+
+    def _update_conversation_tracking(self, speaker, messages=None):
+        """Update conversation tracking and history."""
+        # Increment turns_since_owner AFTER determining speaker was an agent
+        if speaker in self.agents:
+            self.turns_since_owner += 1
+        elif speaker == self.owner:
+            self.turns_since_owner = 0
+            
+        entry = {
+            'speaker': speaker,
+            'turn_number': len(self.conversation_history) + 1,
+            'turns_since_owner': self.turns_since_owner,
+            'owner_intervention': speaker == self.owner and len(self.conversation_history) > 0 and self.conversation_history[-1].get('speaker') in self.agents
+        }
+        
+        # Optionally include message content
+        if messages:
+            entry['messages'] = messages
+            
+        self.conversation_history.append(entry)
+
+    def _log_speaker_selection(self, next_speaker):
+        """Log speaker selection for debugging."""
+        status = f"Turn {len(self.conversation_history) + 1}: {getattr(next_speaker, 'name', str(next_speaker))}"
+        status += f" (Turns since owner: {self.turns_since_owner}"
+        
+        if next_speaker == self.owner and self.turns_since_owner >= self.max_agent_turns:
+            status += " - INTERVENTION REQUIRED"
+        elif next_speaker == self.owner:
+            status += " - Owner guidance"
+        else:
+            status += " - Agent handoff"
+        
+        status += ")"
+        logger.debug(status)
+
+    # === CONFIGURATION METHODS ===
+    
+    def set_max_agent_turns(self, max_turns):
+        """Update the maximum agent turns before owner intervention."""
+        if max_turns < 1:
+            raise ValueError("Max agent turns must be at least 1")
+        self.max_agent_turns = max_turns
+
+    def get_max_agent_turns(self):
+        """Get current max agent turns setting."""
+        return self.max_agent_turns
+
+    # === MONITORING AND ANALYTICS ===
+    
+    def get_conversation_stats(self):
+        """Get detailed conversation statistics."""
+        total_turns = len(self.conversation_history)
+        owner_turns = sum(1 for entry in self.conversation_history 
+                         if entry.get('speaker') == self.owner)
+        agent_turns = total_turns - owner_turns
+        
+        return {
+            'total_turns': total_turns,
+            'owner_turns': owner_turns,
+            'agent_turns': agent_turns,
+            'turns_since_last_owner': self.turns_since_owner,
+            'owner_interventions': self.owner_intervention_count,
+            'current_max_agent_turns': self.max_agent_turns,
+            'intervention_needed': self.turns_since_owner >= self.max_agent_turns,
+            'last_speaker': getattr(self.last_speaker, 'name', str(self.last_speaker)) if self.last_speaker else None
+        }
+
+    def get_handoff_history(self):
+        """Get history of agent handoffs."""
+        return [entry for entry in self.conversation_history 
+                if entry.get('type') == 'handoff']
+
+    def get_intervention_history(self):
+        """Get history of owner interventions."""
+        interventions = []
+        for entry in self.conversation_history:
+            if entry.get('owner_intervention') or entry.get('type') == 'forced_intervention':
+                interventions.append(entry)
+        return interventions
+
+    def reset_conversation(self):
+        """Reset conversation state."""
+        self.turns_since_owner = 0
+        self.last_speaker = None
+        self.conversation_history = []
+        self.owner_intervention_count = 0
+        self._next_speaker_override = None
+        self._force_owner_next = False
+
+    def get_conversation_flow_summary(self):
+        """Get a readable summary of the conversation flow."""
+        if not self.conversation_history:
+            return "No conversation history"
+        
+        summary = []
+        for entry in self.conversation_history:
+            if entry.get('type') == 'handoff':
+                from_name = getattr(entry['from'], 'name', str(entry['from']))
+                to_name = getattr(entry['to'], 'name', str(entry['to']))
+                summary.append(f"[Handoff: {from_name} → {to_name}]")
+            elif entry.get('type') == 'forced_intervention':
+                summary.append("[Forced Intervention]")
+            elif entry.get('speaker'):
+                speaker_name = getattr(entry['speaker'], 'name', str(entry['speaker']))
+                if entry.get('owner_intervention'):
+                    summary.append(f"{speaker_name} (INTERVENTION)")
+                else:
+                    summary.append(speaker_name)
+        
+        return " → ".join(summary)
+
     def get_turn_logs_summary(self) -> str:
         """Get a summary of all turn logs."""
         if not self.turn_logs:
@@ -504,28 +674,3 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
                 f.write(f"  Handoff status: {log.handoff_status}\n")
                 f.write("-"*40 + "\n")
 
-    # ... (include all other methods from the original class)
-    
-    def _update_conversation_tracking(self, speaker, messages=None):
-        """Update conversation tracking and history."""
-        if speaker in self.agents:
-            self.turns_since_owner += 1
-        elif speaker == self.owner:
-            self.turns_since_owner = 0
-            
-        entry = {
-            'speaker': speaker,
-            'turn_number': len(self.conversation_history) + 1,
-            'turns_since_owner': self.turns_since_owner,
-            'owner_intervention': speaker == self.owner and len(self.conversation_history) > 0 and self.conversation_history[-1].get('speaker') in self.agents
-        }
-        
-        if messages:
-            entry['messages'] = messages
-            
-        self.conversation_history.append(entry)
-
-    def _log_speaker_selection(self, next_speaker):
-        """Log speaker selection for debugging."""
-        status = f"Selecting speaker: {getattr(next_speaker, 'name', str(next_speaker))}"
-        logger.debug(status)

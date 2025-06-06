@@ -66,8 +66,9 @@ async def main():
 
     # register_team(team)
     stream = team.run_stream(task=task)
-    logged_stream = log_stream(stream)
-    await Console(logged_stream)
+    # logged_stream = log_stream(stream)
+    # await Console(logged_stream)
+    await Console(stream)
     await model_client.close()
 
 if __name__ == "__main__":
