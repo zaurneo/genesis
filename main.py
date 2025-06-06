@@ -1,5 +1,5 @@
 from autogen_agentchat.teams import RoundRobinGroupChat
-from teams import OwnerMediationGroupChat
+from teams import OwnerMediationGroupChat, FlexibleHandoffGroupChat
 from autogen_agentchat.ui import Console
 import asyncio
 from agents import *
@@ -7,8 +7,8 @@ from clients import model_client_gpt4o as model_client
 from autogen_agentchat.conditions import TextMentionTermination, HandoffTermination
 import config
 
-from utils.tools import register_team
-from utils.common import log_stream
+# from utils.tools import register_team
+# from utils.common import log_stream
 
 
 project_path = config.GENERATED_FILES_DIR
@@ -21,13 +21,12 @@ project_path = config.GENERATED_FILES_DIR
 # )
 
 task = (
-    f"How is the weather in Paris?"
+    f"Write a report about American Airlines"
 )
 
-async def main():
-    text_termination = TextMentionTermination("GENESIS COMPLETED")
-    handoff_termination = HandoffTermination(target="user")
-    team = RoundRobinGroupChat([project_owner,
+
+agents = [
+                                
                                 data_engineer, 
                                 model_executor, 
                                 model_tester, 
@@ -45,11 +44,27 @@ async def main():
                                 efficiency_optimizer_agent,
                                 task_history_review_agent,
                                 task_comprehension_agent,
-                                report_insight_generator],
-                              # termination_condition=text_termination | handoff_termination,
-                              termination_condition=text_termination,
+                                report_insight_generator]
+
+async def main():
+    text_termination = TextMentionTermination("GENESIS COMPLETED")
+    # handoff_termination = HandoffTermination(target="user")
+    # team = RoundRobinGroupChat(agents,
+    #                           # termination_condition=text_termination | handoff_termination,
+    #                           termination_condition=text_termination,
+    # )
+
+
+    team = FlexibleHandoffGroupChat(
+        owner=project_owner,
+        agents=agents,
+        max_agent_turns=4,  # Owner intervenes after 4 agent exchanges
+        report_agent=report_insight_generator,  # Optional: designate report agent
+        tasks=task,  # Pass the tasks
+        termination_condition=text_termination,
     )
-    register_team(team)
+
+    # register_team(team)
     stream = team.run_stream(task=task)
     logged_stream = log_stream(stream)
     await Console(logged_stream)
