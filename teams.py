@@ -9,6 +9,10 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# to get rid of autogen logs
+logging.getLogger("autogen_core").setLevel(logging.WARNING)
+logging.getLogger("autogen_agentchat").setLevel(logging.WARNING)
+
 @dataclass
 class Task:
     """Represents a task that can be assigned to agents."""
