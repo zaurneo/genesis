@@ -80,7 +80,7 @@ async def main():
 
     
 
-    team.set_output_mode('summary') # or formatted
+    team.set_output_mode('minimal') # or formatted
 
 
 

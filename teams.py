@@ -530,10 +530,12 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
             self._output_mode = 'minimal'
         else:
             raise ValueError("Mode must be 'full', 'formatted', 'summary', or 'minimal'")
+        
         """Wrap text to specified width."""
+    def _wrap_text(self, text: str, width: int) -> List[str]:
         words = text.split()
-        lines = []
-        current_line = []
+        lines: List[str] = []
+        current_line: List[str] = []
         current_length = 0
         
         for word in words:
@@ -549,6 +551,8 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
             lines.append(' '.join(current_line))
         
         return lines if lines else ['']
+    
+    def _handle_owner_turn(self):
         """Handle owner's turn - typically providing guidance or new tasks."""
         print("\n" + "="*60)
         print("👑 OWNER INTERVENTION")
