@@ -8,7 +8,7 @@ from autogen_agentchat.conditions import TextMentionTermination, HandoffTerminat
 import config
 
 # from utils.tools import register_team
-# from utils.common import log_stream
+from utils.common import log_stream
 
 
 project_path = config.GENERATED_FILES_DIR
@@ -86,9 +86,8 @@ async def main():
 
     # register_team(team)
     stream = team.run_stream(task=task)
-    # logged_stream = log_stream(stream)
-    # await Console(logged_stream)
-    await Console(stream)
+    logged_stream = log_stream(stream)
+    await Console(logged_stream)
     await model_client.close()
 
 
@@ -101,6 +100,7 @@ async def main():
     print(team.get_turn_logs_summary())
     print(f"\nTotal owner interventions: {team.owner_intervention_count}")
     print(f"Turn logs saved to: {project_path}/turn_logs.txt")
+    print(f"Conversation log saved to: {project_path}/conversation_log.jsonl")
 
 
 
