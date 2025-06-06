@@ -29,9 +29,12 @@ def save_communication_log(messages):
 
 
 async def log_stream(stream):
-    """Yield messages from an async stream and log them to disk."""
-    messages = []
-    async for message in stream:
-        messages.append(message)
-        yield message
-    save_communication_log(messages)
+    """Yield messages from an async stream and persist each one to disk."""
+    os.makedirs(config.GENERATED_FILES_DIR, exist_ok=True)
+    path = os.path.join(config.GENERATED_FILES_DIR, "conversation_log.jsonl")
+    with open(path, "w", encoding="utf-8") as f:
+        async for message in stream:
+            json.dump(message.to_dict(), f)
+            f.write("\n")
+            f.flush()
+            yield message
