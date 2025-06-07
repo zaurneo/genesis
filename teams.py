@@ -48,7 +48,7 @@ class TurnLog:
 class FlexibleHandoffGroupChat(RoundRobinGroupChat):
     """
     Enhanced group chat where agents can hand off tasks to each other,
-    with comprehensive task management and logging.
+    with comprehensive task management, logging, and agent awareness.
     """
     
     def __init__(self, owner, agents, max_agent_turns=5, report_agent=None, tasks=None, 
@@ -109,8 +109,133 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
                 participants.append(self.report_agent)
                 participant_names.add(report_name)
         
+        # INJECT AGENT AWARENESS BEFORE CALLING SUPER().__INIT__
+        self._inject_agent_awareness(self.owner)
+        for agent in self.agents:
+            self._inject_agent_awareness(agent)
+        if self.report_agent:
+            self._inject_agent_awareness(self.report_agent)
+        
         super().__init__(participants, **kwargs)
         self._setup_speaker_selection()
+
+    def _generate_agent_awareness_prompt(self) -> str:
+        """Generate dynamic agent awareness information."""
+        agent_names = [getattr(agent, 'name', str(agent)) for agent in self.agents]
+        agent_list = ", ".join(agent_names)
+        
+        awareness_info = f"""
+
+🚨 CRITICAL - TEAM COMPOSITION AWARENESS 🚨
+=================================================
+ONLY THESE AGENTS EXIST IN YOUR TEAM:
+{agent_list}
+
+PROJECT OWNER: {getattr(self.owner, 'name', str(self.owner))}
+TOTAL AGENTS: {len(self.agents)}
+"""
+        
+        if self.report_agent:
+            awareness_info += f"REPORT AGENT: {getattr(self.report_agent, 'name', str(self.report_agent))}\n"
+        
+        awareness_info += f"""
+⚠️  CRITICAL TASK ASSIGNMENT RULES ⚠️
+- You can ONLY assign tasks to agents listed above
+- NEVER create tasks for "Research Agent", "Writing Agent", "Review Agent" or any other fictional agents
+- Use EXACT agent names: {agent_list}
+- Invalid assignments will cause task failure
+- Format: <exact_agent_name> : <task_description>
+
+AGENT HANDOFF RULES:
+- Handoffs only allowed to agents listed above
+- Max {self.max_agent_turns} agent turns before owner intervention
+=================================================
+"""
+        return awareness_info
+
+    def _inject_agent_awareness(self, agent):
+        """Inject agent awareness into an agent's system message."""
+        if hasattr(agent, 'system_message'):
+            awareness_info = self._generate_agent_awareness_prompt()
+            # Avoid duplicate injection
+            if "=== TEAM COMPOSITION AWARENESS ===" not in agent.system_message:
+                agent.system_message = f"{agent.system_message}{awareness_info}"
+                logger.info(f"Injected agent awareness into {getattr(agent, 'name', str(agent))}")
+
+    def validate_agent_assignment(self, agent_name: str) -> bool:
+        """Validate if an agent name exists in the team."""
+        available_names = [getattr(agent, 'name', str(agent)) for agent in self.agents]
+        available_names.append(getattr(self.owner, 'name', str(self.owner)))
+        if self.report_agent:
+            available_names.append(getattr(self.report_agent, 'name', str(self.report_agent)))
+        return agent_name in available_names
+
+    def get_available_agents(self) -> List[str]:
+        """Get list of available agent names."""
+        agent_names = [getattr(agent, 'name', str(agent)) for agent in self.agents]
+        return agent_names
+
+    def get_all_participants(self) -> List[str]:
+        """Get list of all participant names including owner and report agent."""
+        all_names = [getattr(self.owner, 'name', str(self.owner))]
+        all_names.extend([getattr(agent, 'name', str(agent)) for agent in self.agents])
+        if self.report_agent:
+            all_names.append(getattr(self.report_agent, 'name', str(self.report_agent)))
+        return all_names
+
+    def get_agent_by_name(self, agent_name: str) -> Optional[Any]:
+        """Get agent object by name."""
+        # Check owner
+        if getattr(self.owner, 'name', str(self.owner)) == agent_name:
+            return self.owner
+        
+        # Check agents
+        for agent in self.agents:
+            if getattr(agent, 'name', str(agent)) == agent_name:
+                return agent
+        
+        # Check report agent
+        if self.report_agent and getattr(self.report_agent, 'name', str(self.report_agent)) == agent_name:
+            return self.report_agent
+        
+        return None
+
+    def validate_task_assignment(self, task_description: str) -> Tuple[bool, str, List[str]]:
+        """
+        Validate task assignments in a task description.
+        Returns: (is_valid, error_message, invalid_agents)
+        """
+        invalid_agents = []
+        available_agents = self.get_all_participants()
+        
+        # Simple parsing - look for patterns like "AgentName : task"
+        lines = task_description.split('\n')
+        for line in lines:
+            if ':' in line:
+                potential_agent = line.split(':')[0].strip()
+                # Remove numbering like "1. " if present
+                if potential_agent and not potential_agent[0].isdigit():
+                    if potential_agent not in available_agents:
+                        invalid_agents.append(potential_agent)
+        
+        if invalid_agents:
+            return False, f"Invalid agent assignments: {', '.join(invalid_agents)}", invalid_agents
+        
+        return True, "All agent assignments are valid", []
+
+    def display_team_composition(self):
+        """Display current team composition for debugging."""
+        print("\n" + "="*60)
+        print("👥 CURRENT TEAM COMPOSITION")
+        print("="*60)
+        print(f"🔑 Owner: {getattr(self.owner, 'name', str(self.owner))}")
+        print(f"👥 Agents ({len(self.agents)}):")
+        for i, agent in enumerate(self.agents, 1):
+            print(f"   {i}. {getattr(agent, 'name', str(agent))}")
+        if self.report_agent:
+            print(f"📊 Report Agent: {getattr(self.report_agent, 'name', str(self.report_agent))}")
+        print(f"📋 Total Participants: {len(self.get_all_participants())}")
+        print("="*60 + "\n")
 
     def _validate_inputs(self, owner, agents):
         """Validate constructor inputs."""
@@ -166,6 +291,10 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
             print(f"   Status: {task.status}")
             if task.dependencies:
                 print(f"   Dependencies: {', '.join(task.dependencies)}")
+            
+            # Validate assignment
+            if not self.validate_agent_assignment(task.assigned_to):
+                print(f"   ⚠️  WARNING: Agent '{task.assigned_to}' not found in team!")
         print("="*60 + "\n")
 
     def _get_available_tasks_for_agent(self, agent) -> List[Task]:
@@ -578,12 +707,17 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
         print("="*60 + "\n")
 
     def request_handoff(self, from_agent, to_agent, reason=None) -> Tuple[bool, str]:
-        """Enhanced handoff with task awareness."""
+        """Enhanced handoff with task awareness and validation."""
         if from_agent not in self.agents or to_agent not in self.agents:
             return False, "Both agents must be in the agent list"
         
         if from_agent == to_agent:
             return False, "Cannot handoff to self"
+        
+        # Validate that target agent exists
+        to_agent_name = getattr(to_agent, 'name', str(to_agent))
+        if not self.validate_agent_assignment(to_agent_name):
+            return False, f"Target agent '{to_agent_name}' does not exist in team"
         
         # Check if handoff is allowed
         if self.turns_since_owner >= self.max_agent_turns:
@@ -769,4 +903,3 @@ class FlexibleHandoffGroupChat(RoundRobinGroupChat):
                     f.write(f"  Handoff task: {log.handoff_task_description}\n")
                 f.write(f"  Handoff status: {log.handoff_status}\n")
                 f.write("-"*40 + "\n")
-
