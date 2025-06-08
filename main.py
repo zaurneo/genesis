@@ -1,4 +1,4 @@
-from autogen_agentchat.teams import RoundRobinGroupChat
+from autogen_agentchat.teams import SelectorGroupChat
 from teams import FlexibleHandoffGroupChat
 from autogen_agentchat.ui import Console
 import asyncio
@@ -26,26 +26,12 @@ task = (
 )
 
 
-agents = [
-                                
-                                data_engineer, 
-                                model_executor, 
-                                model_tester, 
-                                quality_assurance,
-                                user_proxy,
-                                user_handoff_agent,
-                                code_reviewer,
-                                agent_awareness_expert, 
-                                python_expert,
-                                innovative_thinker_agent,
-                                agi_gestalt_agent,
-                                project_strategy_manager_agent,
-                                first_principles_thinker_agent,
-                                emotional_intelligence_expert_agent,
-                                efficiency_optimizer_agent,
-                                task_history_review_agent,
-                                task_comprehension_agent,
-                                report_insight_generator]
+selected_agents = [
+        data_engineer,
+        python_expert,
+        innovative_thinker_agent,
+        model_executor
+    ]
 
 async def main():
     import logging
@@ -55,33 +41,29 @@ async def main():
     text_termination = TextMentionTermination("GENESIS COMPLETED")
     handoff_termination = HandoffTermination(target="user")
     
-    # Show output mode options
     print("\n" + "="*60)
-    print("🎨 OUTPUT MODE OPTIONS:")
+    print("🎯 DIRECT AUTOGEN SELECTOR CHAT")
     print("="*60)
-    print("1. 'full'      - Full formatted agent messages")
-    print("2. 'formatted' - Nicely boxed agent messages (default)")
-    print("3. 'summary'   - One-line summaries of agent work")
-    print("4. 'minimal'   - Only show turn tracking")
+    print("Using built-in autogen classes only - no custom wrappers!")
     print("="*60 + "\n")
 
-    owner = project_owner
 
+    print("👑 Owner:", getattr(project_owner, 'name', str(project_owner)))
+    print("👥 Agents:")
+    for i, agent in enumerate(selected_agents, 1):
+        print(f"   {i}. {getattr(agent, 'name', str(agent))}")
+    print()
+
+
+    participants = [project_owner] + selected_agents
     
-    team = FlexibleHandoffGroupChat(
-        owner=owner,
-        agents=agents,
-        max_agent_turns=4,  # Owner intervenes after 4 agent exchanges
-        # report_agent=report_insight_generator,  # Optional: designate report agent
-        tasks=task,  # Pass the tasks
-        format_agent_output=True,  # Enable formatted output
-        show_agent_messages=True,  # Show agent messages
-        termination_condition=text_termination,
-    )
+    team = SelectorGroupChat(
+            participants=participants,
+            model_client=model_client,
+            termination_condition=text_termination
+        )
 
-    
 
-    team.set_output_mode('minimal') # or formatted
 
 
 
