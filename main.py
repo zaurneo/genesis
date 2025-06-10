@@ -54,13 +54,28 @@ async def main():
         print(f"   {i}. {getattr(agent, 'name', str(agent))}")
     print()
 
-
     participants = [project_owner] + selected_agents
-    
+
+
+    selector_prompt = """Select an agent to perform task.
+
+    {roles}
+
+    Current conversation context:
+    {history}
+
+    Read the above conversation, then select an agent from {participants} to perform the next task.
+    Make sure the planner agent has assigned tasks before other agents start working.
+    Only select one agent.
+    """
+
+  
     team = SelectorGroupChat(
             participants=participants,
             model_client=model_client,
-            termination_condition=text_termination
+            termination_condition=text_termination,
+            selector_prompt=selector_prompt,
+            allow_repeated_speaker=True,  # Allow an agent to speak multiple turns in a row.
         )
 
 
