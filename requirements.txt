@@ -1,0 +1,16 @@
+# requirements.txt - Enhanced Code Development System
+langchain-core
+langchain-openai
+langgraph
+python-dotenv
+
+# Enhanced features
+psutil>=5.9.0           # Resource monitoring
+setuptools>=65.0        # Package management 
+wheel>=0.37.0           # Package building
+
+# Optional but recommended
+pytest>=7.0.0           # Advanced testing
+flake8>=5.0.0           # Code linting
+black>=22.0.0           # Code formatting
+bandit>=1.7.0           # Security scanning
