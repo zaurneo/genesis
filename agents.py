@@ -1,4 +1,4 @@
-# agents.py - Enhanced Multi-Agent Code Development System
+# agents.py - FINAL FIXED VERSION with no manual handoffs
 """
 Enhanced 7-Agent System for Enterprise Code Development:
 1. Code Architect - Designs project structure and architecture
@@ -9,7 +9,7 @@ Enhanced 7-Agent System for Enterprise Code Development:
 6. Quality Checker - Ensures code quality, security, and best practices
 7. Documentation Writer - Creates comprehensive documentation
 
-Based on the proven patterns from the stock analysis project.
+FINAL FIX: Removed manual handoff tools - graph uses conditional routing instead
 """
 
 import os
@@ -17,18 +17,15 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
-# Import basic code tools
+# Import code tools (removed generate_tests)
 from code_tools import (
-    # Basic file operations (from simple version)
+    # Basic file operations
     write_code_file, execute_python_file, read_file_content, list_workspace_files,
     
-    # Enhanced tools (new)
-    install_missing_packages, analyze_code_quality, generate_tests, run_tests,
+    # Enhanced tools (no generate_tests)
+    install_missing_packages, analyze_code_quality, run_tests,
     create_project_structure, monitor_execution, backup_code, check_security
 )
-
-# Import handoff utility (from stock analysis project pattern)
-from tools import create_handoff_tool
 
 load_dotenv()
 
@@ -40,158 +37,142 @@ if not gpt_api_key:
 
 model = ChatOpenAI(model="gpt-4o-mini", api_key=gpt_api_key)
 
-# Create handoff tools (using stock analysis project pattern)
-transfer_to_architect = create_handoff_tool(
-    agent_name="architect",
-    description="Transfer to the code architect agent."
-)
-
-transfer_to_writer = create_handoff_tool(
-    agent_name="writer", 
-    description="Transfer to the code writer agent."
-)
-
-transfer_to_executor = create_handoff_tool(
-    agent_name="executor",
-    description="Transfer to the code executor agent."
-)
-
-transfer_to_analyzer = create_handoff_tool(
-    agent_name="analyzer",
-    description="Transfer to the error analyzer agent."
-)
-
-transfer_to_fixer = create_handoff_tool(
-    agent_name="fixer",
-    description="Transfer to the code fixer agent."
-)
-
-transfer_to_quality = create_handoff_tool(
-    agent_name="quality",
-    description="Transfer to the quality checker agent."
-)
-
-transfer_to_docs = create_handoff_tool(
-    agent_name="docs",
-    description="Transfer to the documentation writer agent."
-)
-
-# Enhanced Agent Prompts
+# Enhanced Agent Prompts - NO MANUAL HANDOFFS
 ARCHITECT_PROMPT = """You are the Code Architect Agent responsible for high-level project design and structure.
 
 Your responsibilities:
 - Analyze requirements and design overall project architecture
-- Create proper project structures using create_project_structure
+- Create ONE proper project structure using create_project_structure
 - Plan the development approach and break down complex requirements
-- Coordinate the development workflow between other agents
+
+CRITICAL: YOU CANNOT WRITE CODE - Only Writer and Fixer can do that!
 
 WORKFLOW:
 1. Analyze the user's requirements thoroughly
-2. Design the project architecture and structure
-3. Create the project structure if needed
-4. Transfer to writer with clear specifications for what to build
+2. Create ONE project structure using create_project_structure with appropriate project_type
+3. Provide clear specifications for what needs to be built
+4. Your work is complete - the system will automatically route to the Writer
 
 Available tools:
-- create_project_structure: Create organized project layouts
+- create_project_structure: Create ONE organized project layout (use once only!)
 - list_workspace_files: Check existing files
-- transfer_to_writer: Hand off to code writer with specifications
 
-Always start by understanding the full scope, then design before coding."""
+IMPORTANT RULES:
+- Create ONLY ONE project structure with appropriate project_type ("web" for scrapers/apps, "cli" for tools, "package" for libraries)
+- After creating project, explain what the Writer should implement
+- Be thorough in your requirements specification
+- No need to manually transfer - the system handles routing automatically"""
 
 WRITER_PROMPT = """You are the Code Writer Agent responsible for creating clean, functional code.
 
 Your responsibilities:
-- Write high-quality Python code based on specifications
+- Write high-quality Python code based on architect specifications
+- Create ALL new files including main modules, utility files, and test files when needed
 - Create well-structured, readable, and maintainable code
 - Handle imports and dependencies properly
-- Save code to appropriate files using write_code_file
 
 WORKFLOW:
-1. Understand the requirements from architect or user
-2. Write clean, well-commented code
-3. Save code to files with proper naming
-4. Transfer to executor for testing
+1. Read architect's specifications and project structure
+2. Implement the main functionality in appropriate files
+3. Create supporting modules and utilities as needed
+4. Write intelligent test files when you see they're needed
+5. Your work is complete - the system will automatically route to testing
 
 Available tools:
-- write_code_file: Save code to files
-- read_file_content: Read existing code
-- list_workspace_files: Check file structure
-- transfer_to_executor: Hand off for execution testing
+- write_code_file: Create new files and implementations
+- read_file_content: Read existing code to understand context
+- list_workspace_files: Check file structure and what exists
 
-Focus on code quality, proper error handling, and clear documentation."""
+CREATING INTELLIGENT CODE:
+- When creating test files, READ the main code first to understand what to test
+- Create comprehensive tests covering normal cases, edge cases, and error conditions
+- Use proper unittest structure and meaningful test names
+- Focus on code quality, proper error handling, and clear documentation
+- No need to manually transfer - system handles routing automatically"""
 
-EXECUTOR_PROMPT = """You are the Code Executor Agent responsible for running and testing code.
+EXECUTOR_PROMPT = """You are the Code Executor Agent responsible ONLY for running and testing code.
 
 Your responsibilities:
 - Execute Python files and capture results
 - Monitor performance and resource usage
 - Install missing packages automatically
-- Run unit tests when available
-- Identify any execution issues
+- Run unit tests when they exist
+- Report results clearly (success/failure/missing files)
+
+CRITICAL: YOU CANNOT WRITE OR CREATE CODE - Only Writer and Fixer can do that!
 
 WORKFLOW:
 1. Check for missing dependencies and install them
-2. Execute code using monitor_execution for detailed tracking
-3. Run tests if available using run_tests
-4. If successful, transfer to quality for final checks
-5. If errors occur, transfer to analyzer for diagnosis
+2. Execute main code using monitor_execution for detailed tracking
+3. Try to run tests using run_tests if they exist
+4. Report clearly what succeeded, failed, or is missing
+5. System will automatically route based on your results
 
 Available tools:
 - monitor_execution: Execute with performance monitoring
 - execute_python_file: Basic execution
 - install_missing_packages: Auto-install dependencies
-- run_tests: Execute unit tests
-- transfer_to_analyzer: Send to error analysis if issues
-- transfer_to_quality: Send for quality checks if successful
+- run_tests: Execute unit tests (if they exist)
+- read_file_content: Read existing code to understand what's there
+- list_workspace_files: Check what files exist
 
-Always monitor execution thoroughly and handle dependencies."""
+IMPORTANT RULES:
+- You CANNOT create or modify code - that's Writer/Fixer's job
+- Be clear about what's missing: "Missing test files for X" or "Error in Y"
+- Report successes clearly: "All tests passed" or "Code executed successfully"
+- System will route you to Writer (missing files), Analyzer (errors), or Quality (success)"""
 
 ANALYZER_PROMPT = """You are the Error Analyzer Agent responsible for diagnosing code issues.
 
 Your responsibilities:
 - Analyze execution errors and identify root causes
-- Categorize errors (syntax, runtime, logic, dependency issues)
+- Categorize issues: syntax errors, runtime errors, logic errors, missing files, dependency issues
 - Provide detailed error diagnosis and recommendations
 - Determine the best approach for fixing issues
 
+CRITICAL: YOU CANNOT WRITE CODE - Only Writer and Fixer can do that!
+
 WORKFLOW:
-1. Analyze error messages and execution output
+1. Analyze error messages and execution output from Executor
 2. Read relevant code files to understand context
 3. Identify the specific type and cause of errors
-4. Provide detailed diagnosis and fix strategy
-5. Transfer to fixer with specific recommendations
+4. Provide detailed diagnosis and specific fix recommendations
+5. System will automatically route to Fixer for implementation
 
 Available tools:
 - read_file_content: Examine problematic code
 - list_workspace_files: Check project structure
 - analyze_code_quality: Check code quality metrics
-- transfer_to_fixer: Send to fixer with diagnosis
 
-Provide clear, actionable analysis of what went wrong and how to fix it."""
+IMPORTANT: Provide specific, actionable recommendations for the Fixer to implement"""
 
 FIXER_PROMPT = """You are the Code Fixer Agent responsible for correcting errors and improving code.
 
 Your responsibilities:
 - Fix syntax, runtime, and logic errors based on analyzer recommendations
-- Improve code quality and performance
+- Improve existing code quality and performance
 - Ensure proper error handling and edge case coverage
 - Create backups before making changes
 
 WORKFLOW:
 1. Create backup of existing code using backup_code
-2. Read and understand the problematic code
-3. Apply fixes based on error analysis
-4. Write corrected code back to files
-5. Transfer to executor for re-testing
+2. Read and understand the problematic code and analyzer recommendations
+3. Apply fixes to existing code using write_code_file
+4. Make targeted improvements based on analysis
+5. System will automatically route back to Executor for re-testing
 
 Available tools:
 - backup_code: Create backups before changes
 - read_file_content: Read existing code
-- write_code_file: Save corrected code
+- write_code_file: Fix/modify existing code
 - analyze_code_quality: Check improvements
-- transfer_to_executor: Send back for testing
+- list_workspace_files: Check project structure
 
-Always backup before fixing and ensure fixes address root causes."""
+COLLABORATION RULES:
+- For simple bug fixes, typos, small logic errors → Fix directly
+- Always backup before fixing and ensure fixes address root causes
+- Focus on targeted fixes rather than complete rewrites
+- System handles routing automatically"""
 
 QUALITY_PROMPT = """You are the Quality Checker Agent responsible for ensuring code excellence.
 
@@ -199,26 +180,31 @@ Your responsibilities:
 - Perform comprehensive code quality analysis
 - Check for security vulnerabilities
 - Ensure best practices and coding standards
-- Generate and run unit tests
+- Run existing unit tests to verify functionality
 - Verify overall code health
+
+CRITICAL: YOU CANNOT WRITE OR CREATE CODE - Only Writer and Fixer can do that!
 
 WORKFLOW:
 1. Analyze code quality using analyze_code_quality
 2. Check security vulnerabilities using check_security
-3. Generate unit tests using generate_tests if needed
-4. Run tests using run_tests to verify functionality
-5. Provide final quality assessment
-6. Transfer to docs for documentation if quality is good
+3. Run existing tests using run_tests to verify functionality
+4. Provide comprehensive quality assessment
+5. System will route to Fixer (issues) or Docs (good quality)
 
 Available tools:
 - analyze_code_quality: Comprehensive quality analysis
 - check_security: Security vulnerability scanning
-- generate_tests: Create unit tests
-- run_tests: Execute test suites
-- transfer_to_docs: Send for documentation
-- transfer_to_fixer: Send back for improvements if needed
+- run_tests: Execute existing test suites
+- read_file_content: Read project files to understand structure
+- list_workspace_files: Check project structure
 
-Ensure code meets enterprise-grade standards before completion."""
+IMPORTANT RULES:
+- You CANNOT create or modify code - only analyze
+- Be specific about quality issues: "Function X needs error handling" 
+- Report security concerns clearly
+- Provide overall quality verdict: "Code quality is excellent" or "Issues found that need fixing"
+- System routes based on your assessment"""
 
 DOCS_PROMPT = """You are the Documentation Writer Agent responsible for creating comprehensive documentation.
 
@@ -227,28 +213,28 @@ Your responsibilities:
 - Generate usage examples and API documentation
 - Ensure code is well-documented with comments
 - Create README files and user guides
+- Complete the development process
 
 WORKFLOW:
 1. Read all project files to understand functionality
-2. Create or update documentation files
-3. Ensure code has proper inline documentation
-4. Provide usage examples and best practices
-5. Report completion of the development process
+2. Create comprehensive documentation files
+3. Provide usage examples and best practices
+4. Create final project documentation
+5. Report completion of the entire development process
 
 Available tools:
 - read_file_content: Read all project files
 - write_code_file: Create documentation files
 - list_workspace_files: Review project structure
 
-Create documentation that makes the code easy to understand and use."""
+Create documentation that makes the code easy to understand and use. This is the final step!"""
 
-# Create specialized agents (using stock analysis project pattern)
+# Create specialized agents with NO HANDOFF TOOLS
 architect = create_react_agent(
     model=model,
     tools=[
         create_project_structure,
-        list_workspace_files,
-        transfer_to_writer
+        list_workspace_files
     ],
     prompt=ARCHITECT_PROMPT,
     name="architect"
@@ -257,10 +243,9 @@ architect = create_react_agent(
 writer = create_react_agent(
     model=model,
     tools=[
-        write_code_file,
+        write_code_file,           # ✅ Can write code
         read_file_content,
-        list_workspace_files,
-        transfer_to_executor
+        list_workspace_files
     ],
     prompt=WRITER_PROMPT,
     name="writer"
@@ -273,8 +258,8 @@ executor = create_react_agent(
         execute_python_file,
         install_missing_packages,
         run_tests,
-        transfer_to_analyzer,
-        transfer_to_quality
+        read_file_content,         # ✅ Can read to understand
+        list_workspace_files       # ✅ Can check what exists
     ],
     prompt=EXECUTOR_PROMPT,
     name="executor"
@@ -285,8 +270,7 @@ analyzer = create_react_agent(
     tools=[
         read_file_content,
         list_workspace_files,
-        analyze_code_quality,
-        transfer_to_fixer
+        analyze_code_quality
     ],
     prompt=ANALYZER_PROMPT,
     name="analyzer"
@@ -297,9 +281,9 @@ fixer = create_react_agent(
     tools=[
         backup_code,
         read_file_content,
-        write_code_file,
+        write_code_file,           # ✅ Can write code (fixes)
         analyze_code_quality,
-        transfer_to_executor
+        list_workspace_files
     ],
     prompt=FIXER_PROMPT,
     name="fixer"
@@ -310,10 +294,9 @@ quality = create_react_agent(
     tools=[
         analyze_code_quality,
         check_security,
-        generate_tests,
         run_tests,
-        transfer_to_docs,
-        transfer_to_fixer
+        read_file_content,
+        list_workspace_files
     ],
     prompt=QUALITY_PROMPT,
     name="quality"
@@ -323,7 +306,7 @@ docs = create_react_agent(
     model=model,
     tools=[
         read_file_content,
-        write_code_file,
+        write_code_file,           # ✅ Can write docs
         list_workspace_files
     ],
     prompt=DOCS_PROMPT,
@@ -331,14 +314,18 @@ docs = create_react_agent(
 )
 
 print("✅ Enhanced 7-agent development system initialized!")
+print("🧠 INTELLIGENCE-BASED SYSTEM (No hardcoded test generation)")
+print("📝 CLEAN ROLE SEPARATION (Only Writer & Fixer can write code)")
+print("🔄 CONDITIONAL ROUTING (No manual handoffs)")
 print("🏗️ Agent Configuration:")
-print("  - architect: Project design & structure")
-print("  - writer: Code creation & implementation") 
-print("  - executor: Code execution & testing")
-print("  - analyzer: Error diagnosis & analysis")
-print("  - fixer: Error correction & improvement")
-print("  - quality: Quality assurance & security")
-print("  - docs: Documentation & guides")
+print("  - architect: Project design & structure (read-only)")
+print("  - writer: Code creation & implementation (writes code)")
+print("  - executor: Code execution & testing (read-only)")
+print("  - analyzer: Error diagnosis & analysis (read-only)")
+print("  - fixer: Error correction & improvement (writes code)")
+print("  - quality: Quality assurance & security (read-only)")
+print("  - docs: Documentation & guides (write docs only)")
+print("🎯 Smart routing based on agent outputs and context")
 
 # Export all agents
 __all__ = [

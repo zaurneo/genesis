@@ -1,7 +1,8 @@
-# conversation_viewer.py - Enhanced for 7-Agent Development System
+# conversation_viewer.py - Enhanced for 7-Agent Development System (COMPLETE FIXED VERSION)
 """
 Enhanced conversation viewer that shows the collaboration between 7 specialized development agents.
 Based on the stock analysis project patterns but enhanced for code development workflow.
+FIXED: Better error handling for LangGraph ParentCommand errors and improved debugging.
 """
 
 import os
@@ -61,6 +62,7 @@ class CodeDevelopmentViewer:
         print("🛠️ TOOLS: Purple    |  📋 SYSTEM: Light Gray")
         print("="*100)
         print("WORKFLOW: Architect → Writer → Executor → Analyzer → Fixer → Quality → Docs")
+        print("ROLE SEPARATION: Only Writer & Fixer can write code")
         print("="*100 + "\n")
     
     def extract_text_content(self, content):
@@ -127,115 +129,121 @@ class CodeDevelopmentViewer:
             print(f"{'─'*80}{self.colors['reset']}\n")
     
     def process_message(self, msg, current_agent):
-        """Enhanced message processing for 7-agent system"""
-        # Get message ID to avoid duplicates
-        msg_id = None
-        if hasattr(msg, 'id'):
-            msg_id = msg.id
-        elif isinstance(msg, dict) and 'id' in msg:
-            msg_id = msg['id']
+        """Enhanced message processing for 7-agent system with error handling"""
+        try:
+            # Get message ID to avoid duplicates
+            msg_id = None
+            if hasattr(msg, 'id'):
+                msg_id = msg.id
+            elif isinstance(msg, dict) and 'id' in msg:
+                msg_id = msg['id']
+                
+            # Skip if already seen
+            if msg_id and msg_id in self.seen_ids:
+                return
+            if msg_id:
+                self.seen_ids.add(msg_id)
             
-        # Skip if already seen
-        if msg_id and msg_id in self.seen_ids:
-            return
-        if msg_id:
-            self.seen_ids.add(msg_id)
-        
-        # Handle AIMessage objects
-        if isinstance(msg, AIMessage):
-            content = msg.content
-            name = getattr(msg, 'name', current_agent)
-            tool_calls = getattr(msg, 'tool_calls', [])
-            
-            # Display agent message if there's content
-            if content:
-                text = self.extract_text_content(content)
-                if text and not any(skip in text.lower() for skip in ['transfer_to_', 'successfully transferred']):
-                    self.format_and_print(name, text)
-            
-            # Display tool calls (except transfers)
-            if tool_calls:
-                for tc in tool_calls:
-                    tool_name = tc.get('name', 'unknown')
-                    if not tool_name.startswith('transfer_to_'):
-                        self.format_and_print(name, f"🔧 Using tool: {tool_name}")
-            return
-        
-        # Handle ToolMessage objects
-        if isinstance(msg, ToolMessage):
-            content = msg.content
-            tool_name = msg.name
-            
-            # Handle transfers with enhanced visualization
-            if tool_name.startswith('transfer_to_') and 'Successfully transferred' in content:
-                target = tool_name.replace('transfer_to_', '')
-                self.show_handoff(current_agent, target)
+            # Handle AIMessage objects
+            if isinstance(msg, AIMessage):
+                content = msg.content
+                name = getattr(msg, 'name', current_agent)
+                tool_calls = getattr(msg, 'tool_calls', [])
+                
+                # Display agent message if there's content
+                if content:
+                    text = self.extract_text_content(content)
+                    if text and not any(skip in text.lower() for skip in ['transfer_to_', 'successfully transferred']):
+                        self.format_and_print(name, text)
+                
+                # Display tool calls (except transfers)
+                if tool_calls:
+                    for tc in tool_calls:
+                        tool_name = tc.get('name', 'unknown')
+                        if not tool_name.startswith('transfer_to_'):
+                            self.format_and_print(name, f"🔧 Using tool: {tool_name}")
                 return
             
-            # Show enhanced tool results
-            if content and self._is_important_tool_result(tool_name, content):
-                # Truncate very long outputs for readability
-                lines = content.strip().split('\n')
-                if len(lines) > 10:
-                    result_text = '\n'.join(lines[:10]) + f"\n... ({len(lines)-10} more lines)"
-                else:
-                    result_text = content.strip()
+            # Handle ToolMessage objects
+            if isinstance(msg, ToolMessage):
+                content = msg.content
+                tool_name = msg.name
                 
-                # Categorize tool output
-                tool_category = self._categorize_tool(tool_name)
-                self.format_and_print('tool', f"{tool_category} {tool_name}:\n{result_text}")
-            return
-        
-        # Handle dictionary messages
-        if isinstance(msg, dict):
-            role = msg.get('role', '')
-            content = msg.get('content', '')
-            name = msg.get('name', '')
-            
-            # Human messages
-            if role in ['human', 'user']:
-                text = self.extract_text_content(content)
-                if text:
-                    self.format_and_print('user', text)
-                return
-            
-            # Tool messages
-            if role == 'tool':
-                tool_name = name or 'unknown_tool'
-                
-                # Handle transfers
+                # Handle transfers with enhanced visualization
                 if tool_name.startswith('transfer_to_') and 'Successfully transferred' in content:
                     target = tool_name.replace('transfer_to_', '')
                     self.show_handoff(current_agent, target)
                     return
                 
-                # Show other tool results
+                # Show enhanced tool results
                 if content and self._is_important_tool_result(tool_name, content):
+                    # Truncate very long outputs for readability
                     lines = content.strip().split('\n')
                     if len(lines) > 10:
                         result_text = '\n'.join(lines[:10]) + f"\n... ({len(lines)-10} more lines)"
                     else:
                         result_text = content.strip()
                     
+                    # Categorize tool output
                     tool_category = self._categorize_tool(tool_name)
                     self.format_and_print('tool', f"{tool_category} {tool_name}:\n{result_text}")
                 return
             
-            # Agent messages with name
-            agent_names = ['architect', 'writer', 'executor', 'analyzer', 'fixer', 'quality', 'docs']
-            if name in agent_names:
-                if content:
+            # Handle dictionary messages
+            if isinstance(msg, dict):
+                role = msg.get('role', '')
+                content = msg.get('content', '')
+                name = msg.get('name', '')
+                
+                # Human messages
+                if role in ['human', 'user']:
                     text = self.extract_text_content(content)
-                    if text and not any(skip in text.lower() for skip in ['transfer_to_', 'successfully transferred']):
-                        self.format_and_print(name, text)
-                return
+                    if text:
+                        self.format_and_print('user', text)
+                    return
+                
+                # Tool messages
+                if role == 'tool':
+                    tool_name = name or 'unknown_tool'
+                    
+                    # Handle transfers
+                    if tool_name.startswith('transfer_to_') and 'Successfully transferred' in content:
+                        target = tool_name.replace('transfer_to_', '')
+                        self.show_handoff(current_agent, target)
+                        return
+                    
+                    # Show other tool results
+                    if content and self._is_important_tool_result(tool_name, content):
+                        lines = content.strip().split('\n')
+                        if len(lines) > 10:
+                            result_text = '\n'.join(lines[:10]) + f"\n... ({len(lines)-10} more lines)"
+                        else:
+                            result_text = content.strip()
+                        
+                        tool_category = self._categorize_tool(tool_name)
+                        self.format_and_print('tool', f"{tool_category} {tool_name}:\n{result_text}")
+                    return
+                
+                # Agent messages with name
+                agent_names = ['architect', 'writer', 'executor', 'analyzer', 'fixer', 'quality', 'docs']
+                if name in agent_names:
+                    if content:
+                        text = self.extract_text_content(content)
+                        if text and not any(skip in text.lower() for skip in ['transfer_to_', 'successfully transferred']):
+                            self.format_and_print(name, text)
+                    return
+                    
+        except Exception as e:
+            # Don't let message processing errors crash the whole system
+            if os.environ.get("DEBUG", "").lower() == "true":
+                print(f"\n{self.colors['tool']}⚠️ Message processing error: {e}{self.colors['reset']}")
     
     def _is_important_tool_result(self, tool_name: str, content: str) -> bool:
         """Determine if tool result should be displayed"""
         # Always show these tools
         important_tools = [
             'write_code_file', 'execute_python_file', 'monitor_execution',
-            'analyze_code_quality', 'check_security', 'generate_tests',
+            'analyze_code_quality', 'check_security', 'run_tests',
             'create_project_structure', 'install_missing_packages'
         ]
         
@@ -252,7 +260,6 @@ class CodeDevelopmentViewer:
             'monitor_execution': '📊',
             'analyze_code_quality': '🔍',
             'check_security': '🔒',
-            'generate_tests': '🧪',
             'run_tests': '✅',
             'create_project_structure': '🏗️',
             'install_missing_packages': '📦',
@@ -261,7 +268,7 @@ class CodeDevelopmentViewer:
         return categories.get(tool_name, '🛠️')
     
     def run(self, graph, initial_message: str):
-        """Run enhanced conversation with progress tracking"""
+        """Run enhanced conversation with improved error handling"""
         self.print_header()
         
         # Show initial message
@@ -272,17 +279,28 @@ class CodeDevelopmentViewer:
         chunk_count = 0
         
         try:
-            # Stream the conversation with progress tracking
+            # Stream the conversation with improved error handling
             for chunk in graph.stream({"messages": [HumanMessage(content=initial_message)]}):
                 chunk_count += 1
                 
-                # Process each agent's messages
+                # Process each agent's messages with error handling
                 for agent_name, data in chunk.items():
-                    messages = data.get('messages', [])
-                    
-                    # Process all messages
-                    for msg in messages:
-                        self.process_message(msg, agent_name)
+                    try:
+                        messages = data.get('messages', [])
+                        
+                        # Process all messages with individual error handling
+                        for msg in messages:
+                            try:
+                                self.process_message(msg, agent_name)
+                            except Exception as msg_error:
+                                if os.environ.get("DEBUG", "").lower() == "true":
+                                    print(f"\n{self.colors['tool']}⚠️ Message processing error: {msg_error}{self.colors['reset']}")
+                                continue
+                                
+                    except Exception as agent_error:
+                        if os.environ.get("DEBUG", "").lower() == "true":
+                            print(f"\n{self.colors['tool']}⚠️ Agent {agent_name} processing error: {agent_error}{self.colors['reset']}")
+                        continue
                 
                 # Small delay for readability
                 time.sleep(0.02)
@@ -291,8 +309,17 @@ class CodeDevelopmentViewer:
             print(f"\n{self.colors['system']}⏹️ Development session interrupted by user{self.colors['reset']}")
         except Exception as e:
             print(f"\n{self.colors['tool']}❌ System Error: {e}{self.colors['reset']}")
-            import traceback
-            traceback.print_exc()
+            print(f"{self.colors['tool']}💡 This may be a LangGraph compatibility issue{self.colors['reset']}")
+            
+            # Try to provide some helpful information
+            if "ParentCommand" in str(e):
+                print(f"{self.colors['tool']}🔧 ParentCommand error detected - this is usually a handoff issue{self.colors['reset']}")
+                print(f"{self.colors['tool']}💡 The handoff tools have been fixed to resolve this{self.colors['reset']}")
+                print(f"{self.colors['tool']}🔄 Try running the system again{self.colors['reset']}")
+            
+            if os.environ.get("DEBUG", "").lower() == "true":
+                import traceback
+                traceback.print_exc()
         
         execution_time = time.time() - start_time
         print(f"\n{self.colors['system']}✅ Development session completed in {execution_time:.1f} seconds!{self.colors['reset']}")
@@ -310,8 +337,12 @@ class CodeDevelopmentViewer:
                 icon = self.agent_icons.get(agent, "🤖")
                 color = self.colors.get(agent, self.colors['system'])
                 avg_length = stats['total_chars'] / max(1, stats['messages'])
+                
+                # Show if agent can write code
+                code_writer = " (writes code)" if agent in ['writer', 'fixer'] else " (read-only)"
+                
                 print(f"{color}  {icon} {agent.upper()}: {stats['messages']} messages "
-                      f"({avg_length:.0f} avg chars){self.colors['reset']}")
+                      f"({avg_length:.0f} avg chars){code_writer}{self.colors['reset']}")
         
         # Tool usage
         tool_messages = sum(1 for _, agent, _ in self.message_history if agent == 'tool')
@@ -319,6 +350,7 @@ class CodeDevelopmentViewer:
             print(f"🛠️ Tool operations: {tool_messages}")
         
         print(f"📈 Total exchanges: {len(self.message_history)}")
+        print(f"📝 Role separation: Only Writer & Fixer can write code")
         print(f"{self.colors['reset']}")
     
     def save_log(self, filename=None):
@@ -336,17 +368,19 @@ class CodeDevelopmentViewer:
         try:
             with open(log_file, 'w', encoding='utf-8') as f:
                 f.write("ENTERPRISE CODE DEVELOPMENT SESSION LOG\n")
-                f.write("7-Agent Collaborative Development System\n")
+                f.write("7-Agent Collaborative Development System with Role Separation\n")
                 f.write("=" * 80 + "\n")
                 f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write("=" * 80 + "\n\n")
                 
                 f.write("AGENT WORKFLOW:\n")
-                f.write("🏗️ Architect → ✍️ Writer → ⚡ Executor → 🔍 Analyzer → 🔧 Fixer → ✅ Quality → 📚 Docs\n\n")
+                f.write("🏗️ Architect → ✍️ Writer → ⚡ Executor → 🔍 Analyzer → 🔧 Fixer → ✅ Quality → 📚 Docs\n")
+                f.write("ROLE SEPARATION: Only Writer & Fixer can write code\n\n")
                 
                 for timestamp, agent, message in self.message_history:
                     icon = self.agent_icons.get(agent, "🤖")
-                    f.write(f"[{timestamp}] {icon} {agent.upper()}:\n")
+                    code_writer = " (CODE WRITER)" if agent in ['writer', 'fixer'] else ""
+                    f.write(f"[{timestamp}] {icon} {agent.upper()}{code_writer}:\n")
                     f.write(f"{message}\n")
                     f.write("-" * 60 + "\n\n")
                 
@@ -359,11 +393,17 @@ class CodeDevelopmentViewer:
                 for agent, stats in sorted(self.agent_stats.items()):
                     if agent != 'tool':
                         icon = self.agent_icons.get(agent, "🤖")
-                        f.write(f"{icon} {agent.upper()}: {stats['messages']} messages\n")
+                        code_writer = " (writes code)" if agent in ['writer', 'fixer'] else " (read-only)"
+                        f.write(f"{icon} {agent.upper()}: {stats['messages']} messages{code_writer}\n")
                 
                 tool_messages = sum(1 for _, agent, _ in self.message_history if agent == 'tool')
                 if tool_messages > 0:
                     f.write(f"🛠️ Tool operations: {tool_messages}\n")
+                
+                f.write(f"\nRole Separation Enforced:\n")
+                f.write(f"✅ Code Writers: Writer, Fixer\n")
+                f.write(f"❌ Read-Only: Architect, Executor, Analyzer, Quality\n")
+                f.write(f"📄 Documentation: Docs\n")
             
             print(f"💾 Development session log saved to: {log_file}")
             return str(log_file)

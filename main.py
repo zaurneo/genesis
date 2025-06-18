@@ -1,16 +1,10 @@
-# main.py - Enhanced Enterprise Code Development System
+# main.py - FINAL FIXED VERSION with proper graph routing
 """
 Enhanced Multi-Agent Enterprise Code Development System with 7 Specialized Agents:
 
 🏗️ Architect → ✍️ Writer → ⚡ Executor → 🔍 Analyzer → 🔧 Fixer → ✅ Quality → 📚 Docs
 
-Features added based on stock analysis project patterns:
-- Comprehensive project management
-- Advanced error handling and fixing
-- Code quality assurance and security
-- Automated testing and documentation
-- Performance monitoring and optimization
-- Professional project structure
+FINAL FIX: Proper LangGraph routing with conditional edges for handoffs
 """
 
 import os
@@ -20,13 +14,85 @@ from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
-from langgraph.graph import StateGraph, START, MessagesState
+from langgraph.graph import StateGraph, START, END, MessagesState
 
 # Import enhanced conversation viewer
 from conversation_viewer import CodeDevelopmentViewer
 from agents import architect, writer, executor, analyzer, fixer, quality, docs
 
 load_dotenv()
+
+def route_after_architect(state: MessagesState):
+    """Route after architect based on last message"""
+    messages = state.get("messages", [])
+    if not messages:
+        return "writer"
+    
+    last_message = messages[-1]
+    # Check if architect wants to transfer to writer
+    if hasattr(last_message, 'content') and last_message.content:
+        content = str(last_message.content).lower()
+        if "writer" in content or "passed to the writer" in content or "transfer" in content:
+            return "writer"
+    
+    # Check for tool calls that transfer to writer
+    if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
+        for tool_call in last_message.tool_calls:
+            if tool_call.get('name') == 'transfer_to_writer':
+                return "writer"
+    
+    return "writer"  # Default to writer
+
+def route_after_writer(state: MessagesState):
+    """Route after writer - should go to executor"""
+    return "executor"
+
+def route_after_executor(state: MessagesState):
+    """Route after executor based on results"""
+    messages = state.get("messages", [])
+    if not messages:
+        return "quality"
+    
+    last_message = messages[-1]
+    if hasattr(last_message, 'content') and last_message.content:
+        content = str(last_message.content).lower()
+        if "error" in content or "failed" in content or "missing" in content:
+            if "missing" in content and "test" in content:
+                return "writer"  # Missing tests -> back to writer
+            else:
+                return "analyzer"  # Errors -> analyzer
+        elif "success" in content or "passed" in content:
+            return "quality"  # Success -> quality
+    
+    return "quality"  # Default to quality
+
+def route_after_analyzer(state: MessagesState):
+    """Route after analyzer - should go to fixer"""
+    return "fixer"
+
+def route_after_fixer(state: MessagesState):
+    """Route after fixer - back to executor for testing"""
+    return "executor"
+
+def route_after_quality(state: MessagesState):
+    """Route after quality - should go to docs if good, or fixer if issues"""
+    messages = state.get("messages", [])
+    if not messages:
+        return "docs"
+    
+    last_message = messages[-1]
+    if hasattr(last_message, 'content') and last_message.content:
+        content = str(last_message.content).lower()
+        if "issue" in content or "problem" in content or "failed" in content:
+            return "fixer"  # Issues -> fixer
+        else:
+            return "docs"  # Good -> docs
+    
+    return "docs"  # Default to docs
+
+def route_after_docs(state: MessagesState):
+    """Route after docs - end the workflow"""
+    return END
 
 class EnhancedCodeDevelopmentSystem:
     """Enterprise-grade code development system with 7 specialized agents"""
@@ -55,23 +121,85 @@ class EnhancedCodeDevelopmentSystem:
         print(f"📁 Workspace: {Path('workspace').absolute()}")
     
     def setup_graph(self):
-        """Initialize the 7-agent development graph"""
-        print("🔧 Building enterprise 7-agent development system...")
+        """Initialize the 7-agent development graph with PROPER ROUTING"""
+        print("🔧 Building enterprise 7-agent development system with conditional routing...")
         
-        self.graph = (
-            StateGraph(MessagesState)
-            .add_node("architect", architect)
-            .add_node("writer", writer)
-            .add_node("executor", executor)
-            .add_node("analyzer", analyzer)
-            .add_node("fixer", fixer)
-            .add_node("quality", quality)
-            .add_node("docs", docs)
-            .add_edge(START, "architect")
-            .compile()
-        )
-        
-        print("✅ 7-agent development graph created successfully!")
+        try:
+            # Build graph with conditional edges for proper handoffs
+            workflow = StateGraph(MessagesState)
+            
+            # Add all agent nodes
+            workflow.add_node("architect", architect)
+            workflow.add_node("writer", writer)
+            workflow.add_node("executor", executor)
+            workflow.add_node("analyzer", analyzer)
+            workflow.add_node("fixer", fixer)
+            workflow.add_node("quality", quality)
+            workflow.add_node("docs", docs)
+            
+            # Set entry point
+            workflow.add_edge(START, "architect")
+            
+            # Add conditional edges for proper routing
+            workflow.add_conditional_edges(
+                "architect",
+                route_after_architect,
+                {"writer": "writer"}
+            )
+            
+            workflow.add_conditional_edges(
+                "writer", 
+                route_after_writer,
+                {"executor": "executor"}
+            )
+            
+            workflow.add_conditional_edges(
+                "executor",
+                route_after_executor,
+                {
+                    "writer": "writer",      # Missing tests -> writer
+                    "analyzer": "analyzer",  # Errors -> analyzer
+                    "quality": "quality"     # Success -> quality
+                }
+            )
+            
+            workflow.add_conditional_edges(
+                "analyzer",
+                route_after_analyzer,
+                {"fixer": "fixer"}
+            )
+            
+            workflow.add_conditional_edges(
+                "fixer",
+                route_after_fixer,
+                {"executor": "executor"}  # Back to executor for testing
+            )
+            
+            workflow.add_conditional_edges(
+                "quality",
+                route_after_quality,
+                {
+                    "fixer": "fixer",    # Issues -> fixer
+                    "docs": "docs"       # Good -> docs
+                }
+            )
+            
+            workflow.add_conditional_edges(
+                "docs",
+                route_after_docs,
+                {END: END}
+            )
+            
+            # Compile the workflow
+            self.graph = workflow.compile()
+            
+            print("✅ 7-agent development graph with conditional routing created successfully!")
+            
+        except Exception as e:
+            print(f"❌ Error creating graph: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     def get_demo_projects(self):
         """Get comprehensive demo project examples"""
@@ -107,7 +235,9 @@ class EnhancedCodeDevelopmentSystem:
         """Run interactive development demonstration"""
         print("🚀 ENTERPRISE CODE DEVELOPMENT SYSTEM")
         print("=" * 80)
-        print("🎯 POWERED BY: 7 Specialized AI Agents + Advanced Tooling")
+        print("🎯 POWERED BY: 7 Specialized AI Agents + Conditional Routing")
+        print("📝 ROLE SEPARATION: Only Writer & Fixer can write code")
+        print("🔄 SMART ROUTING: Agents hand off based on context")
         print("=" * 80)
         print("This system will:")
         print("1. 🏗️ Design proper project architecture and structure")
@@ -117,7 +247,7 @@ class EnhancedCodeDevelopmentSystem:
         print("5. 🔧 Fix errors and improve code quality automatically")
         print("6. ✅ Ensure code quality, security, and best practices")
         print("7. 📚 Generate comprehensive documentation")
-        print("8. 🧪 Create and run automated tests")
+        print("8. 🧪 Create and run tests intelligently")
         print("9. 📊 Monitor performance and resource usage")
         print("10. 🔒 Perform security vulnerability scanning")
         print("=" * 80)
@@ -248,13 +378,13 @@ class EnhancedCodeDevelopmentSystem:
         # Show agent capabilities
         print("\n🤖 Agent Capabilities:")
         agents = {
-            "🏗️ Architect": "Project design, structure planning, requirements analysis",
-            "✍️ Writer": "Code generation, implementation, clean coding practices",
-            "⚡ Executor": "Code execution, performance monitoring, dependency management",
-            "🔍 Analyzer": "Error diagnosis, root cause analysis, issue categorization",
-            "🔧 Fixer": "Error correction, code improvement, backup management",
-            "✅ Quality": "Quality assurance, security scanning, testing, standards",
-            "📚 Docs": "Documentation generation, guides, API docs, examples"
+            "🏗️ Architect": "Project design, structure planning, requirements analysis (read-only)",
+            "✍️ Writer": "Code generation, implementation, clean coding practices (writes code)",
+            "⚡ Executor": "Code execution, performance monitoring, dependency management (read-only)",
+            "🔍 Analyzer": "Error diagnosis, root cause analysis, issue categorization (read-only)",
+            "🔧 Fixer": "Error correction, code improvement, backup management (writes code)",
+            "✅ Quality": "Quality assurance, security scanning, testing, standards (read-only)",
+            "📚 Docs": "Documentation generation, guides, API docs, examples (docs only)"
         }
         
         for agent, capability in agents.items():
@@ -264,19 +394,35 @@ class EnhancedCodeDevelopmentSystem:
         print(f"\n🛠️ Available Tools:")
         tools = [
             "Code quality analysis", "Security vulnerability scanning",
-            "Automated testing", "Performance monitoring", 
+            "Intelligent testing", "Performance monitoring", 
             "Dependency management", "Project structure creation",
             "Code backup/versioning", "Documentation generation"
         ]
         
         for tool in tools:
             print(f"  • {tool}")
+        
+        print(f"\n📝 Role Separation:")
+        print(f"  ✅ Can write code: Writer, Fixer")
+        print(f"  ❌ Read-only: Architect, Executor, Analyzer, Quality")
+        print(f"  📄 Docs only: Docs")
+        
+        print(f"\n🔄 Smart Routing:")
+        print(f"  📐 Architect → Writer (always)")
+        print(f"  📝 Writer → Executor (for testing)")
+        print(f"  ⚡ Executor → Writer (missing tests) | Analyzer (errors) | Quality (success)")
+        print(f"  🔍 Analyzer → Fixer (for fixes)")
+        print(f"  🔧 Fixer → Executor (for re-testing)")
+        print(f"  ✅ Quality → Fixer (issues) | Docs (success)")
+        print(f"  📚 Docs → END (completion)")
 
 def main():
     """Main entry point for enhanced development system"""
     print("🚀 Enterprise Code Development System with 7 AI Agents")
     print("=" * 70)
     print("🏗️ Architect → ✍️ Writer → ⚡ Executor → 🔍 Analyzer → 🔧 Fixer → ✅ Quality → 📚 Docs")
+    print("📝 Role Separation: Only Writer & Fixer can write code")
+    print("🔄 Smart Conditional Routing: Context-based handoffs")
     print("=" * 70)
     
     # Create system
@@ -315,6 +461,14 @@ def main():
             print("  python main.py --demo")
             print("  python main.py --quick 'create a web scraper'")
             print("  python main.py --status")
+            print("\nRole Separation:")
+            print("  📝 Writer: Creates new code and files")
+            print("  🔧 Fixer: Fixes existing code")
+            print("  🔍 Others: Read-only, request code via smart routing")
+            print("\nSmart Routing:")
+            print("  🔄 Context-aware handoffs between agents")
+            print("  📐 Conditional edges based on agent outputs")
+            print("  🎯 Automatic workflow progression")
             return
         
         else:
