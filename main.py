@@ -1,14 +1,9 @@
 # main.py - 6-AGENT HIERARCHICAL SYSTEM with Technical Lead Authority
 """
-Streamlined 6-Agent Enterprise Code Development System:
-
-🏗️ Architect → 🧑‍💼 Technical Lead → ✍️ Writer → ⚡ Executor → 🧑‍💼 Technical Lead → 📚 Docs
-                     ↕️                                          ↕️
-                 📊 Task Manager                            📊 Task Manager
-
-HIERARCHICAL: Technical Lead has authority and oversight over all agents
-STREAMLINED: Writer handles both creation and fixing, removing redundant agents
-ORGANIZED: Task Manager tracks all work in table format per Technical Lead directives
+Streamlined 6-Agent Enterprise Code Development System with fixes for:
+- Single tool call enforcement
+- Proper graph routing
+- Error handling
 """
 
 import os
@@ -22,7 +17,14 @@ from langgraph.graph import StateGraph, START, END, MessagesState
 
 # Import enhanced conversation viewer
 from conversation_viewer import CodeDevelopmentViewer
-from agents import architect, writer, executor, technical_lead, task_manager, docs
+
+# Import agents - make sure they're properly imported
+try:
+    from agents import architect, writer, executor, technical_lead, task_manager, docs, finalizer
+    print("✅ All agents imported successfully")
+except ImportError as e:
+    print(f"❌ Error importing agents: {e}")
+    sys.exit(1)
 
 load_dotenv()
 
@@ -57,7 +59,37 @@ class HierarchicalCodeDevelopmentSystem:
         print("🔧 Building hierarchical 6-agent development system with Technical Lead authority...")
         
         try:
-            # Build hierarchical graph - Technical Lead has oversight
+            # Define router function
+            def route_next_agent(state: MessagesState) -> str:
+                """Route to the next agent based on the last tool message"""
+                messages = state["messages"]
+                if not messages:
+                    return "finalizer"
+                
+                # Look for the most recent tool message that indicates a transfer
+                for message in reversed(messages):
+                    if hasattr(message, "name") and hasattr(message, "content"):
+                        # Check if it's a tool message from a transfer
+                        if message.name and message.name.startswith("transfer_to_"):
+                            content = str(message.content)
+                            if "Successfully transferred to" in content:
+                                # Extract the target agent from the tool name
+                                target = message.name.replace("transfer_to_", "")
+                                if target in ["architect", "writer", "executor", 
+                                            "technical_lead", "task_manager", "docs", "finalizer"]:
+                                    print(f"🔄 Routing to {target}")
+                                    return target
+                
+                # If no transfer found, check the last AI message for its name
+                for message in reversed(messages):
+                    if hasattr(message, "name") and message.name:
+                        # Stay with current agent
+                        return message.name
+                
+                # Default to technical lead if no agent identified
+                return "technical_lead"
+            
+            # Build hierarchical graph
             workflow = StateGraph(MessagesState)
             
             # Add all agent nodes
@@ -67,24 +99,39 @@ class HierarchicalCodeDevelopmentSystem:
             workflow.add_node("technical_lead", technical_lead)
             workflow.add_node("task_manager", task_manager)
             workflow.add_node("docs", docs)
+            workflow.add_node("finalizer", finalizer)
             
             # Set entry point - always start with architect
             workflow.add_edge(START, "architect")
             
-            # Simple edges - agents use handoff tools to control routing
-            # Technical Lead can redirect any workflow
-            workflow.add_edge("architect", END)
-            workflow.add_edge("writer", END) 
-            workflow.add_edge("executor", END)
-            workflow.add_edge("technical_lead", END)
-            workflow.add_edge("task_manager", END)
-            workflow.add_edge("docs", END)
+            # Add conditional edges for each agent (except finalizer)
+            agents = ["architect", "writer", "executor", "technical_lead", "task_manager", "docs"]
+            
+            for agent in agents:
+                workflow.add_conditional_edges(
+                    agent,
+                    route_next_agent,
+                    {
+                        "architect": "architect",
+                        "writer": "writer",
+                        "executor": "executor",
+                        "technical_lead": "technical_lead",
+                        "task_manager": "task_manager",
+                        "docs": "docs",
+                        "finalizer": "finalizer"
+                    }
+                )
+            
+            # Finalizer always goes to END
+            workflow.add_edge("finalizer", END)
             
             # Compile the workflow
             self.graph = workflow.compile()
             
             print("✅ 6-agent hierarchical development graph created successfully!")
             print("🧑‍💼 Technical Lead has authority over all workflow decisions!")
+            print("🏁 Finalizer agent will complete the session when all work is done!")
+            print("⚠️ Remember: Agents can only make ONE tool call at a time!")
             
         except Exception as e:
             print(f"❌ Error creating graph: {e}")
@@ -132,18 +179,8 @@ class HierarchicalCodeDevelopmentSystem:
         print("📝 SINGLE CODE WRITER: Only Writer creates and fixes ALL code")
         print("📊 TASK TRACKING: Task Manager maintains organized progress tables")
         print("🔄 HIERARCHICAL HANDOFFS: All agents report to Technical Lead")
-        print("=" * 80)
-        print("This system demonstrates:")
-        print("1. 🏗️ Professional project architecture and structure planning")
-        print("2. 🧑‍💼 Technical Lead oversight with authority and experience")
-        print("3. ✍️ Unified code creation and fixing by expert Writer")
-        print("4. ⚡ Comprehensive code execution and performance testing")
-        print("5. 📊 Organized task tracking and status management")
-        print("6. 📚 Complete documentation generation and validation")
-        print("7. 🔒 Security scanning and quality assurance")
-        print("8. 📈 Performance monitoring and optimization")
-        print("9. 🧪 Intelligent test creation and execution")
-        print("10. 🎯 Authoritative guidance and decision-making")
+        print("🏁 FINALIZER: Completes session when all work is done")
+        print("⚠️ SINGLE TOOL CALLS: Agents make one tool call at a time")
         print("=" * 80)
         
         demo_projects = self.get_demo_projects()
@@ -207,15 +244,6 @@ class HierarchicalCodeDevelopmentSystem:
         print("\n" + "=" * 80)
         print("🎉 HIERARCHICAL ENTERPRISE DEVELOPMENT SESSION COMPLETED!")
         print("=" * 80)
-        print("The system has demonstrated:")
-        print("✅ Technical Lead authority and oversight throughout development")
-        print("✅ Professional project architecture and design")
-        print("✅ Unified code creation and fixing by expert Writer")
-        print("✅ Comprehensive testing and performance monitoring")
-        print("✅ Organized task tracking and status management")
-        print("✅ Quality assurance and security scanning")
-        print("✅ Complete documentation generation")
-        print("✅ Hierarchical workflow with clear authority structure")
         
         # Show generated files and projects
         print(f"\n📁 Generated Content:")
@@ -230,34 +258,18 @@ class HierarchicalCodeDevelopmentSystem:
                 projects = list(projects_dir.glob("*"))
                 if projects:
                     print(f"🏗️ Projects Created: {len(projects)}")
-                    for project in projects[:3]:  # Show first 3
+                    for project in projects[:3]:
                         print(f"  📦 {project.name}/")
             
-            # Show task files
-            tasks_dir = workspace / "tasks"
-            if tasks_dir.exists():
-                task_files = list(tasks_dir.glob("*.md"))
-                if task_files:
-                    print(f"📊 Task Tracking Files: {len(task_files)}")
-                    for task_file in task_files[:3]:
-                        print(f"  📋 {task_file.name}")
-            
             # Show individual files
-            files = list(workspace.glob("*.py"))
+            files = list(workspace.rglob("*.py"))
             if files:
                 print(f"📄 Python Files: {len(files)}")
-                for file in files[:5]:  # Show first 5
+                for file in files[:5]:
                     size = file.stat().st_size
-                    print(f"  🐍 {file.name} ({size} bytes)")
-            
-            # Show backups
-            backups_dir = workspace / "backups"
-            if backups_dir.exists():
-                backups = list(backups_dir.glob("*.backup"))
-                if backups:
-                    print(f"💾 Code Backups: {len(backups)}")
+                    print(f"  🐍 {file.relative_to(workspace)} ({size} bytes)")
         
-        print("\n💡 The 6-agent hierarchical system with Technical Lead authority delivered enterprise-grade results!")
+        print("\n💡 The 7-agent hierarchical system delivered enterprise-grade results!")
     
     def show_system_status(self):
         """Show current system status and capabilities"""
@@ -271,57 +283,16 @@ class HierarchicalCodeDevelopmentSystem:
             files = [f for f in files if f.is_file()]
             print(f"📁 Workspace files: {len(files)}")
         
-        # Show agent capabilities
-        print("\n🤖 Agent Capabilities & Hierarchy:")
-        agents = {
-            "🏗️ Architect": "Project design, structure planning → reports to Technical Lead",
-            "🧑‍💼 Technical Lead": "AUTHORITY over all agents, guides, validates, and makes decisions",
-            "✍️ Writer": "ALL code creation and fixing (only code writer) → reports to Technical Lead",
-            "⚡ Executor": "Code execution, performance monitoring → reports to Technical Lead",
-            "📊 Task Manager": "Task tracking in table format, updates only per Technical Lead directive",
-            "📚 Docs": "Documentation generation → reports to Technical Lead"
-        }
-        
-        for agent, capability in agents.items():
-            print(f"  {agent}: {capability}")
-        
-        # Show available tools
-        print(f"\n🛠️ Available Tools:")
-        tools = [
-            "Code quality analysis", "Security vulnerability scanning",
-            "Intelligent testing", "Performance monitoring", 
-            "Dependency management", "Project structure creation",
-            "Code backup/versioning", "Documentation generation",
-            "Task tracking and management", "Technical Lead oversight"
-        ]
-        
-        for tool in tools:
-            print(f"  • {tool}")
-        
-        print(f"\n📝 Role Separation:")
-        print(f"  ✅ Can write code: Writer ONLY")
-        print(f"  🧑‍💼 Authority: Technical Lead has oversight over ALL agents")
-        print(f"  📊 Task updates: Only Task Manager per Technical Lead directive")
-        print(f"  📄 Documentation: Docs agent")
-        print(f"  ❌ Read-only: Architect, Executor")
-        
-        print(f"\n🏛️ Hierarchical System:")
-        print(f"  🧑‍💼 Technical Lead: AUTHORITY and oversight over all workflow")
-        print(f"  📐 Architect → Technical Lead validation required")
-        print(f"  📝 Writer → Technical Lead guidance and approval")
-        print(f"  ⚡ Executor → Technical Lead evaluation of results")
-        print(f"  📊 Task Manager → Updates only per Technical Lead directive")
-        print(f"  📚 Docs → Technical Lead validation required")
-        print(f"  🎯 All major decisions flow through Technical Lead")
+        print("\n⚠️ Key System Rules:")
+        print("  • Agents can only make ONE tool call at a time")
+        print("  • Technical Lead has authority over all agents")
+        print("  • Only Writer can create/modify code")
+        print("  • Task Manager updates only per Technical Lead directive")
+        print("  • All agents must wait for tool results before next action")
 
 def main():
     """Main entry point for hierarchical development system"""
     print("🚀 Hierarchical Enterprise Code Development System")
-    print("=" * 70)
-    print("🧑‍💼 Technical Lead Authority: Experienced leader with oversight")
-    print("✍️ Single Code Writer: Writer handles ALL code creation and fixing")
-    print("📊 Task Management: Organized tracking per Technical Lead directives")
-    print("🔄 Hierarchical Handoffs: All agents report to Technical Lead")
     print("=" * 70)
     
     # Create system
@@ -345,40 +316,15 @@ def main():
                 system.run_quick_development(request)
             else:
                 print("❌ Please provide a request after --quick")
-                print("Example: python main.py --quick 'create a calculator with tests'")
-            return
-        
-        elif command == "--help":
-            print("🤖 HIERARCHICAL ENTERPRISE DEVELOPMENT SYSTEM - HELP")
-            print("=" * 60)
-            print("\nAvailable commands:")
-            print("  --demo     : Run full interactive demo")
-            print("  --quick    : Quick development mode")
-            print("  --status   : Show system status")
-            print("  --help     : Show this help")
-            print("\nExamples:")
-            print("  python main.py --demo")
-            print("  python main.py --quick 'create a web scraper'")
-            print("  python main.py --status")
-            print("\nHierarchical Structure:")
-            print("  🧑‍💼 Technical Lead: Authority over all agents")
-            print("  📝 Writer: Only agent who can write/fix code")
-            print("  📊 Task Manager: Tracks tasks per Technical Lead directives")
-            print("  🔍 Others: Report to Technical Lead for guidance")
-            print("\nKey Features:")
-            print("  🎯 Technical Lead oversight and decision-making")
-            print("  📋 Organized task tracking in table format")
-            print("  🔄 Hierarchical handoffs with clear authority")
-            print("  ✅ Enterprise-grade quality and standards")
             return
         
         else:
-            # Treat unknown command as development request
+            # Treat as development request
             request = " ".join(sys.argv[1:])
             system.run_quick_development(request)
             return
     
-    # Default action - run interactive demo
+    # Default - run interactive demo
     try:
         system.run_interactive_demo()
     except KeyboardInterrupt:

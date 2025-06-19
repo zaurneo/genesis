@@ -23,6 +23,7 @@ class CodeDevelopmentViewer:
             'technical_lead': '\033[91m',   # Red - Technical Lead AUTHORITY
             'task_manager': '\033[93m',     # Yellow - Task tracking
             'docs': '\033[97m',             # White - Documentation
+            'finalizer': '\033[95m',        # Magenta - Session completion
             'user': '\033[90m',             # Gray - User input
             'tool': '\033[35m',             # Purple - Tool operations
             'handoff': '\033[33m',          # Orange - Handoff operations
@@ -38,6 +39,7 @@ class CodeDevelopmentViewer:
             'technical_lead': '🧑‍💼',
             'task_manager': '📊',
             'docs': '📚',
+            'finalizer': '🏁',
             'user': '👤',
             'tool': '🛠️',
             'handoff': '🔄',
@@ -56,19 +58,23 @@ class CodeDevelopmentViewer:
         # Ensure logs directory exists
         self.logs_dir = Path('logs')
         self.logs_dir.mkdir(exist_ok=True)
+
+        self.agent_action_history = []  # Track agent actions to detect cycles
+        self.agent_visit_count = {}      # Count how many times each agent is visited
         
     def print_header(self):
         """Print enhanced conversation header for hierarchical system"""
         print("\n" + "="*100)
-        print("🚀 HIERARCHICAL ENTERPRISE CODE DEVELOPMENT - 6 AI AGENT COLLABORATION")
+        print("🚀 HIERARCHICAL ENTERPRISE CODE DEVELOPMENT - 7 AI AGENT COLLABORATION")
         print("="*100)
         print("🏗️ ARCHITECT: Cyan    |  ✍️ WRITER: Blue      |  ⚡ EXECUTOR: Green")
         print("🧑‍💼 TECH LEAD: Red    |  📊 TASK MGR: Yellow  |  📚 DOCS: White")
-        print("🛠️ TOOLS: Purple      |  🔄 HANDOFFS: Orange  |  👑 AUTHORITY: Bold Red")
+        print("🏁 FINALIZER: Magenta |  🛠️ TOOLS: Purple    |  🔄 HANDOFFS: Orange")
         print("="*100)
         print("HIERARCHY: Technical Lead has AUTHORITY over all agents")
         print("CODE WRITER: Only Writer creates and fixes ALL code")
         print("TASK TRACKING: Task Manager updates only per Technical Lead directive")
+        print("SESSION COMPLETION: Finalizer ends when all work is done")
         print("="*100 + "\n")
     
     def extract_text_content(self, content):
@@ -156,6 +162,11 @@ class CodeDevelopmentViewer:
                 print(f"\n{self.colors['authority']}{'═'*80}")
                 print(f"👑 TECHNICAL LEAD DIRECTIVE #{self.handoff_count}: {from_icon} TECH LEAD → {to_icon} {to_agent.upper()}")
                 print(f"   📋 Authority decision and direction")
+                print(f"{'═'*80}{self.colors['reset']}\n")
+            elif to_agent == 'finalizer':
+                print(f"\n{self.colors['finalizer']}{'═'*80}")
+                print(f"🏁 SESSION COMPLETION #{self.handoff_count}: {from_icon} {from_agent.upper()} → {to_icon} FINALIZER")
+                print(f"   📋 All tasks completed - finalizing development session")
                 print(f"{'═'*80}{self.colors['reset']}\n")
             else:
                 print(f"\n{self.colors['handoff']}{'─'*80}")
@@ -285,7 +296,7 @@ class CodeDevelopmentViewer:
                     return
                 
                 # Agent messages with name
-                agent_names = ['architect', 'writer', 'executor', 'technical_lead', 'task_manager', 'docs']
+                agent_names = ['architect', 'writer', 'executor', 'technical_lead', 'task_manager', 'docs', 'finalizer']
                 if name in agent_names:
                     if content:
                         text = self.extract_text_content(content)
@@ -342,7 +353,25 @@ class CodeDevelopmentViewer:
             return '🔄'
             
         return categories.get(tool_name, '🛠️')
-    
+
+    def _detect_cycle(self, actions: List[str]) -> bool:
+        """Detect if there's a repeating cycle in recent actions"""
+        if len(actions) < 4:
+            return False
+        
+        # Check for simple 2-step cycles (A→B→A→B)
+        if len(actions) >= 4:
+            if actions[-1] == actions[-3] and actions[-2] == actions[-4]:
+                return True
+        
+        # Check for 3-step cycles (A→B→C→A→B→C)
+        if len(actions) >= 6:
+            pattern = actions[-3:]
+            if actions[-6:-3] == pattern:
+                return True
+        
+        return False
+
     def run(self, graph, initial_message: str):
         """Run enhanced conversation with hierarchical system visualization"""
         self.print_header()
@@ -354,17 +383,43 @@ class CodeDevelopmentViewer:
         start_time = time.time()
         chunk_count = 0
         
+        # Temporary increase recursion limit while debugging
+        config = {"recursion_limit": 100}
+        
         try:
-            # Stream the conversation with improved error handling
-            for chunk in graph.stream({"messages": [HumanMessage(content=initial_message)]}):
+            for chunk in graph.stream(
+                {"messages": [HumanMessage(content=initial_message)]},
+                config=config
+            ):
                 chunk_count += 1
                 
-                # Process each agent's messages with error handling
+                # Detect potential cycles
+                if chunk_count > 30:
+                    print(f"\n{self.colors['tool']}⚠️ WARNING: High iteration count ({chunk_count})")
+                    print(f"Agent visit counts: {self.agent_visit_count}")
+                    
+                    # Check for repeated patterns
+                    if len(self.agent_action_history) > 10:
+                        recent_actions = self.agent_action_history[-10:]
+                        print(f"Recent actions: {' → '.join(recent_actions)}")
+                        
+                        # Detect simple cycles
+                        if self._detect_cycle(recent_actions):
+                            print(f"🔄 CYCLE DETECTED! Agents are repeating actions.")
+                            print(f"Consider adding logic to prevent re-executing completed tasks.{self.colors['reset']}\n")
+                
+                # Process each agent's messages
                 for agent_name, data in chunk.items():
+                    # Track agent visits
+                    self.agent_visit_count[agent_name] = self.agent_visit_count.get(agent_name, 0) + 1
+                    
+                    # Track actions for cycle detection
+                    if len(self.agent_action_history) > 50:
+                        self.agent_action_history.pop(0)  # Keep only recent history
+                    self.agent_action_history.append(agent_name)
+                    
                     try:
                         messages = data.get('messages', [])
-                        
-                        # Process all messages with individual error handling
                         for msg in messages:
                             try:
                                 self.process_message(msg, agent_name)
@@ -372,27 +427,28 @@ class CodeDevelopmentViewer:
                                 if os.environ.get("DEBUG", "").lower() == "true":
                                     print(f"\n{self.colors['tool']}⚠️ Message processing error: {msg_error}{self.colors['reset']}")
                                 continue
-                                
                     except Exception as agent_error:
                         if os.environ.get("DEBUG", "").lower() == "true":
                             print(f"\n{self.colors['tool']}⚠️ Agent {agent_name} processing error: {agent_error}{self.colors['reset']}")
                         continue
                 
-                # Small delay for readability
                 time.sleep(0.02)
                 
-        except KeyboardInterrupt:
-            print(f"\n{self.colors['system']}⏹️ Development session interrupted by user{self.colors['reset']}")
         except Exception as e:
             print(f"\n{self.colors['tool']}❌ System Error: {e}{self.colors['reset']}")
-            print(f"{self.colors['tool']}💡 This may be a handoff tool or LangGraph compatibility issue{self.colors['reset']}")
             
-            if os.environ.get("DEBUG", "").lower() == "true":
-                import traceback
-                traceback.print_exc()
+            if "recursion_limit" in str(e).lower():
+                print(f"\n{self.colors['tool']}🔍 CYCLE ANALYSIS:")
+                print(f"Total iterations: {chunk_count}")
+                print(f"Agent visit counts: {self.agent_visit_count}")
+                print(f"Most visited agent: {max(self.agent_visit_count.items(), key=lambda x: x[1]) if self.agent_visit_count else 'None'}")
+                print(f"\nRecent action pattern: {' → '.join(self.agent_action_history[-20:])}")
+                print(f"\n💡 Solution: Fix the cycle in agent logic, don't just increase recursion limit!{self.colors['reset']}")
+            else:
+                print(f"{self.colors['tool']}💡 This may be a handoff tool or LangGraph compatibility issue{self.colors['reset']}")
         
         execution_time = time.time() - start_time
-        print(f"\n{self.colors['system']}✅ Hierarchical development session completed in {execution_time:.1f} seconds!{self.colors['reset']}")
+        print(f"\n{self.colors['system']}✅ Session completed in {execution_time:.1f} seconds!{self.colors['reset']}")
         self.print_enhanced_summary()
     
     def print_enhanced_summary(self):
@@ -417,6 +473,8 @@ class CodeDevelopmentViewer:
                     role_info = " (ONLY code writer - creates & fixes)"
                 elif agent == 'task_manager':
                     role_info = " (task tracking per Tech Lead directive)"
+                elif agent == 'finalizer':
+                    role_info = " (session completion)"
                 elif agent in ['architect', 'executor']:
                     role_info = " (read-only, reports to Tech Lead)"
                 else:
@@ -444,6 +502,7 @@ class CodeDevelopmentViewer:
         print(f"📝 Role separation: Only Writer creates and fixes code")
         print(f"🧑‍💼 Authority structure: Technical Lead oversees all work")
         print(f"📊 Task management: Updates only per Technical Lead directive")
+        print(f"🏁 Session completion: Finalizer ends when all work is done")
         print(f"{self.colors['reset']}")
     
     def save_log(self, filename=None):
@@ -461,18 +520,19 @@ class CodeDevelopmentViewer:
         try:
             with open(log_file, 'w', encoding='utf-8') as f:
                 f.write("HIERARCHICAL ENTERPRISE CODE DEVELOPMENT SESSION LOG\n")
-                f.write("6-Agent Collaborative Development System with Technical Lead Authority\n")
+                f.write("7-Agent Collaborative Development System with Technical Lead Authority\n")
                 f.write("=" * 80 + "\n")
                 f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write("=" * 80 + "\n\n")
                 
                 f.write("HIERARCHICAL WORKFLOW:\n")
-                f.write("🏗️ Architect → 🧑‍💼 Technical Lead → ✍️ Writer → ⚡ Executor → 🧑‍💼 Technical Lead → 📚 Docs\n")
+                f.write("🏗️ Architect → 🧑‍💼 Technical Lead → ✍️ Writer → ⚡ Executor → 🧑‍💼 Technical Lead → 📚 Docs → 🏁 Finalizer\n")
                 f.write("                     ↕️                                          ↕️\n")
                 f.write("                 📊 Task Manager                            📊 Task Manager\n\n")
                 f.write("HIERARCHY: Technical Lead has AUTHORITY over all agents\n")
                 f.write("ROLE SEPARATION: Only Writer creates and fixes ALL code\n")
-                f.write("TASK TRACKING: Task Manager updates only per Technical Lead directive\n\n")
+                f.write("TASK TRACKING: Task Manager updates only per Technical Lead directive\n")
+                f.write("SESSION COMPLETION: Finalizer ends when all work is done\n\n")
                 
                 for timestamp, agent, message, is_authority in self.message_history:
                     icon = self.agent_icons.get(agent, "🤖")
@@ -486,6 +546,8 @@ class CodeDevelopmentViewer:
                         role_marker = " (ONLY CODE WRITER)"
                     elif agent == 'task_manager':
                         role_marker = " (TASK TRACKING)"
+                    elif agent == 'finalizer':
+                        role_marker = " (SESSION COMPLETION)"
                     else:
                         role_marker = ""
                     
@@ -512,6 +574,8 @@ class CodeDevelopmentViewer:
                             role_info = " (only code writer)"
                         elif agent == 'task_manager':
                             role_info = " (task tracking)"
+                        elif agent == 'finalizer':
+                            role_info = " (session completion)"
                         else:
                             role_info = " (reports to Tech Lead)"
                             
@@ -527,6 +591,7 @@ class CodeDevelopmentViewer:
                 f.write(f"📊 Organized Task Tracking: Updates only per Technical Lead directive\n")
                 f.write(f"🔄 Hierarchical Handoffs: All agents report to Technical Lead\n")
                 f.write(f"🎯 Clear Authority Structure: Technical Lead guides all work\n")
+                f.write(f"🏁 Clean Session Completion: Finalizer ends when work is done\n")
             
             print(f"💾 Hierarchical development session log saved to: {log_file}")
             return str(log_file)

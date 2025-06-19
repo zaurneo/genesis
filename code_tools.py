@@ -2,6 +2,7 @@
 """
 Enhanced tools for comprehensive code development, testing, quality assurance, and task management.
 Includes task management tools for the hierarchical 6-agent system with Technical Lead authority.
+FIXED: Path handling to prevent workspace duplication
 """
 
 import os
@@ -15,6 +16,26 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from langchain_core.tools import tool
+
+def _clean_path(filename: str) -> str:
+    """Clean and normalize file paths to prevent workspace duplication"""
+    if not filename:
+        return ""
+    
+    # Normalize path separators
+    filename = filename.replace("\\", "/")
+    
+    # Remove leading/trailing whitespace
+    filename = filename.strip()
+    
+    # Remove workspace prefix if present (case-insensitive)
+    if filename.lower().startswith("workspace/"):
+        filename = filename[10:]  # Remove "workspace/"
+    
+    # Remove leading slashes
+    filename = filename.lstrip("/")
+    
+    return filename
 
 @tool
 def create_task_table(project_name: str, initial_tasks: str = "") -> str:
@@ -100,7 +121,7 @@ def create_task_table(project_name: str, initial_tasks: str = "") -> str:
 
 📊 Task Table Details:
 - Project: {project_name.replace('_', ' ').title()}
-- File: {task_file.relative_to(workspace)}
+- File: tasks/{task_file.name}
 - Initial Tasks: {len(initial_tasks.split(',')) if initial_tasks else 6}
 - Authority: Technical Lead controls all status updates
 
@@ -333,13 +354,8 @@ def run_tests(test_path: str) -> str:
         if not workspace.exists():
             return "❌ Error: Workspace directory does not exist"
         
-        # Clean and resolve the test path
-        test_path = test_path.strip()
-        
-        # Handle different path formats
-        if test_path.startswith("workspace/") or test_path.startswith("workspace\\"):
-            # Remove workspace prefix to avoid double workspace
-            test_path = test_path.replace("workspace/", "").replace("workspace\\", "")
+        # Clean the test path to prevent workspace duplication
+        test_path = _clean_path(test_path)
         
         # Convert to Path object
         full_test_path = workspace / test_path
@@ -491,10 +507,8 @@ def read_file_content(filename: str) -> str:
         
         workspace = Path("workspace")
         
-        # Clean filename and handle different path formats
-        filename = filename.strip()
-        if filename.startswith("workspace/") or filename.startswith("workspace\\"):
-            filename = filename.replace("workspace/", "").replace("workspace\\", "")
+        # Clean filename to prevent workspace duplication
+        filename = _clean_path(filename)
         
         file_path = workspace / filename
         
@@ -533,10 +547,8 @@ def write_code_file(filename: str, content: str) -> str:
         workspace = Path("workspace")
         workspace.mkdir(exist_ok=True)
         
-        # Clean filename and handle different path formats
-        filename = filename.strip()
-        if filename.startswith("workspace/") or filename.startswith("workspace\\"):
-            filename = filename.replace("workspace/", "").replace("workspace\\", "")
+        # Clean filename to prevent workspace duplication
+        filename = _clean_path(filename)
         
         file_path = workspace / filename
         
@@ -819,10 +831,8 @@ def analyze_code_quality(filename: str) -> str:
             
         workspace = Path("workspace")
         
-        # Clean filename
-        filename = filename.strip()
-        if filename.startswith("workspace/") or filename.startswith("workspace\\"):
-            filename = filename.replace("workspace/", "").replace("workspace\\", "")
+        # Clean filename to prevent workspace duplication
+        filename = _clean_path(filename)
             
         file_path = workspace / filename
         
@@ -920,10 +930,8 @@ def check_security(filename: str) -> str:
         
         workspace = Path("workspace")
         
-        # Clean filename
-        filename = filename.strip()
-        if filename.startswith("workspace/") or filename.startswith("workspace\\"):
-            filename = filename.replace("workspace/", "").replace("workspace\\", "")
+        # Clean filename to prevent workspace duplication
+        filename = _clean_path(filename)
             
         file_path = workspace / filename
         
@@ -1006,11 +1014,9 @@ def execute_python_file(filename: str) -> str:
         
         workspace = Path("workspace")
         
-        # Clean filename
-        filename = filename.strip()
-        if filename.startswith("workspace/") or filename.startswith("workspace\\"):
-            filename = filename.replace("workspace/", "").replace("workspace\\", "")
-            
+        # Clean filename to prevent workspace duplication
+        filename = _clean_path(filename)
+        
         file_path = workspace / filename
         
         if not file_path.exists():
@@ -1056,11 +1062,9 @@ def monitor_execution(filename: str, timeout: int = 10) -> str:
         
         workspace = Path("workspace")
         
-        # Clean filename
-        filename = filename.strip()
-        if filename.startswith("workspace/") or filename.startswith("workspace\\"):
-            filename = filename.replace("workspace/", "").replace("workspace\\", "")
-            
+        # Clean filename to prevent workspace duplication
+        filename = _clean_path(filename)
+        
         file_path = workspace / filename
         
         if not file_path.exists():
@@ -1161,10 +1165,8 @@ def backup_code(filename: str) -> str:
         
         workspace = Path("workspace")
         
-        # Clean filename
-        filename = filename.strip()
-        if filename.startswith("workspace/") or filename.startswith("workspace\\"):
-            filename = filename.replace("workspace/", "").replace("workspace\\", "")
+        # Clean filename to prevent workspace duplication
+        filename = _clean_path(filename)
             
         file_path = workspace / filename
         
@@ -1230,7 +1232,7 @@ def backup_code(filename: str) -> str:
 
 📁 Backup Details:
 - Original: {filename}
-- Backup: {backup_filename}
+- Backup: backups/{backup_filename}
 - Size: {backup_path.stat().st_size} bytes
 - Location: workspace/backups/
 
