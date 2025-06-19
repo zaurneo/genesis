@@ -15,6 +15,11 @@ from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, START, END, MessagesState
 
+import functools
+from typing import TypedDict, Annotated, Sequence
+from langchain_core.messages import BaseMessage
+from langgraph.graph import StateGraph, START, END
+
 # Import enhanced conversation viewer
 from conversation_viewer import CodeDevelopmentViewer
 
@@ -27,6 +32,22 @@ except ImportError as e:
     sys.exit(1)
 
 load_dotenv()
+
+
+
+# Define state properly
+class AgentState(TypedDict):
+    messages: Annotated[Sequence[BaseMessage], "The messages in the conversation"]
+
+def agent_node(state: AgentState, agent, name: str):
+    """Wrapper function for agents to work as nodes"""
+    result = agent.invoke(state)
+    # Extract messages from the result
+    if isinstance(result, dict) and "messages" in result:
+        return {"messages": result["messages"]}
+    # If agent returns Command, it will be handled by graph
+    return result
+
 
 class HierarchicalCodeDevelopmentSystem:
     """Enterprise-grade code development system with Technical Lead authority and task tracking"""
@@ -56,89 +77,50 @@ class HierarchicalCodeDevelopmentSystem:
     
     def setup_graph(self):
         """Initialize the 6-agent hierarchical development graph"""
-        print("🔧 Building hierarchical 6-agent development system with Technical Lead authority...")
+        print("🔧 Building hierarchical 6-agent development system...")
         
         try:
-            # Define router function
-            def route_next_agent(state: MessagesState) -> str:
-                """Route to the next agent based on the last tool message"""
-                messages = state["messages"]
-                if not messages:
-                    return "finalizer"
-                
-                # Look for the most recent tool message that indicates a transfer
-                for message in reversed(messages):
-                    if hasattr(message, "name") and hasattr(message, "content"):
-                        # Check if it's a tool message from a transfer
-                        if message.name and message.name.startswith("transfer_to_"):
-                            content = str(message.content)
-                            if "Successfully transferred to" in content:
-                                # Extract the target agent from the tool name
-                                target = message.name.replace("transfer_to_", "")
-                                if target in ["architect", "writer", "executor", 
-                                            "technical_lead", "task_manager", "docs", "finalizer"]:
-                                    print(f"🔄 Routing to {target}")
-                                    return target
-                
-                # If no transfer found, check the last AI message for its name
-                for message in reversed(messages):
-                    if hasattr(message, "name") and message.name:
-                        # Stay with current agent
-                        return message.name
-                
-                # Default to technical lead if no agent identified
-                return "technical_lead"
+            # Build the graph with proper state
+            workflow = StateGraph(AgentState)
             
-            # Build hierarchical graph
-            workflow = StateGraph(MessagesState)
+            # Create node functions for each agent
+            # This is the key - wrap agents in the agent_node function
+            architect_node = functools.partial(agent_node, agent=architect, name="architect")
+            writer_node = functools.partial(agent_node, agent=writer, name="writer")
+            executor_node = functools.partial(agent_node, agent=executor, name="executor")
+            technical_lead_node = functools.partial(agent_node, agent=technical_lead, name="technical_lead")
+            task_manager_node = functools.partial(agent_node, agent=task_manager, name="task_manager")
+            docs_node = functools.partial(agent_node, agent=docs, name="docs")
+            finalizer_node = functools.partial(agent_node, agent=finalizer, name="finalizer")
             
-            # Add all agent nodes
-            workflow.add_node("architect", architect)
-            workflow.add_node("writer", writer)
-            workflow.add_node("executor", executor)
-            workflow.add_node("technical_lead", technical_lead)
-            workflow.add_node("task_manager", task_manager)
-            workflow.add_node("docs", docs)
-            workflow.add_node("finalizer", finalizer)
+            # Add nodes with the wrapper functions
+            workflow.add_node("architect", architect_node)
+            workflow.add_node("writer", writer_node)
+            workflow.add_node("executor", executor_node)
+            workflow.add_node("technical_lead", technical_lead_node)
+            workflow.add_node("task_manager", task_manager_node)
+            workflow.add_node("docs", docs_node)
+            workflow.add_node("finalizer", finalizer_node)
             
-            # Set entry point - always start with architect
+            # Set entry point
             workflow.add_edge(START, "architect")
             
-            # Add conditional edges for each agent (except finalizer)
-            agents = ["architect", "writer", "executor", "technical_lead", "task_manager", "docs"]
-            
-            for agent in agents:
-                workflow.add_conditional_edges(
-                    agent,
-                    route_next_agent,
-                    {
-                        "architect": "architect",
-                        "writer": "writer",
-                        "executor": "executor",
-                        "technical_lead": "technical_lead",
-                        "task_manager": "task_manager",
-                        "docs": "docs",
-                        "finalizer": "finalizer"
-                    }
-                )
-            
-            # Finalizer always goes to END
+            # Only add edge from finalizer to END
+            # Command objects will handle all other routing
             workflow.add_edge("finalizer", END)
             
-            # Compile the workflow
+            # Compile the workflow - no conditional edges needed!
             self.graph = workflow.compile()
             
-            print("✅ 6-agent hierarchical development graph created successfully!")
-            print("🧑‍💼 Technical Lead has authority over all workflow decisions!")
-            print("🏁 Finalizer agent will complete the session when all work is done!")
-            print("⚠️ Remember: Agents can only make ONE tool call at a time!")
+            print("✅ Graph created successfully!")
+            print("📌 Using Command-based routing (no conditional edges)")
             
         except Exception as e:
             print(f"❌ Error creating graph: {e}")
             import traceback
             traceback.print_exc()
             raise
-    
+            
     def get_demo_projects(self):
         """Get comprehensive demo project examples"""
         return [
