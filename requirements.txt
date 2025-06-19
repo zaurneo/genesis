@@ -1,16 +1,25 @@
-# requirements.txt - Enhanced Code Development System
-langchain-core
-langchain-openai
-langgraph
-python-dotenv
+# requirements.txt - Hierarchical 6-Agent Enterprise Code Development System
+# Core LangChain and LangGraph components for agent collaboration
+langchain-core>=0.1.0
+langchain-openai>=0.1.0
+langgraph>=0.1.0
+python-dotenv>=1.0.0
 
-# Enhanced features
-psutil>=5.9.0           # Resource monitoring
-setuptools>=65.0        # Package management 
+# Enhanced features for monitoring, quality, and task management
+psutil>=5.9.0           # Resource monitoring for code execution
+setuptools>=65.0        # Package management and distribution
 wheel>=0.37.0           # Package building
 
-# Optional but recommended
-pytest>=7.0.0           # Advanced testing
-flake8>=5.0.0           # Code linting
+# Development and quality tools (optional but recommended)
+pytest>=7.0.0           # Advanced testing capabilities
+flake8>=5.0.0           # Code linting and style checking
 black>=22.0.0           # Code formatting
-bandit>=1.7.0           # Security scanning
+bandit>=1.7.0           # Security vulnerability scanning
+
+# Common project dependencies (for generated projects)
+requests>=2.25.0        # For web-related projects and API calls
+beautifulsoup4>=4.9.0   # For web scraping projects
+flask>=2.0.0            # For web application projects
+click>=8.0.0            # For CLI tool projects
+pandas>=1.3.0           # For data analysis projects
+numpy>=1.21.0           # For scientific computing projects

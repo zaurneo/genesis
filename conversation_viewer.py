@@ -1,8 +1,8 @@
-# conversation_viewer.py - Enhanced for 7-Agent Development System (COMPLETE FIXED VERSION)
+# conversation_viewer.py - Enhanced for Hierarchical 6-Agent Development System
 """
-Enhanced conversation viewer that shows the collaboration between 7 specialized development agents.
-Based on the stock analysis project patterns but enhanced for code development workflow.
-FIXED: Better error handling for LangGraph ParentCommand errors and improved debugging.
+Enhanced conversation viewer for the hierarchical 6-agent development system.
+Features Technical Lead authority visualization and task tracking display.
+HIERARCHICAL: Shows Technical Lead oversight and authority over all agents.
 """
 
 import os
@@ -13,20 +13,21 @@ from pathlib import Path
 from langchain_core.messages import HumanMessage, BaseMessage, AIMessage, ToolMessage
 
 class CodeDevelopmentViewer:
-    """Enhanced live conversation viewer for 7-agent code development system"""
+    """Enhanced live conversation viewer for hierarchical 6-agent development system"""
     
     def __init__(self):
         self.colors = {
-            'architect': '\033[96m',     # Cyan - Project design
-            'writer': '\033[94m',        # Blue - Code writing  
-            'executor': '\033[92m',      # Green - Execution
-            'analyzer': '\033[93m',      # Yellow - Error analysis
-            'fixer': '\033[95m',         # Magenta - Fixing
-            'quality': '\033[91m',       # Red - Quality checks
-            'docs': '\033[97m',          # White - Documentation
-            'user': '\033[90m',          # Gray - User input
-            'tool': '\033[35m',          # Purple - Tool operations
-            'system': '\033[37m',        # Light gray - System
+            'architect': '\033[96m',        # Cyan - Project design
+            'writer': '\033[94m',           # Blue - Code writing (ONLY code writer)  
+            'executor': '\033[92m',         # Green - Execution
+            'technical_lead': '\033[91m',   # Red - Technical Lead AUTHORITY
+            'task_manager': '\033[93m',     # Yellow - Task tracking
+            'docs': '\033[97m',             # White - Documentation
+            'user': '\033[90m',             # Gray - User input
+            'tool': '\033[35m',             # Purple - Tool operations
+            'handoff': '\033[33m',          # Orange - Handoff operations
+            'authority': '\033[1;91m',      # Bold Red - Authority decisions
+            'system': '\033[37m',           # Light gray - System
             'reset': '\033[0m'
         }
         
@@ -34,12 +35,13 @@ class CodeDevelopmentViewer:
             'architect': '🏗️',
             'writer': '✍️',
             'executor': '⚡',
-            'analyzer': '🔍',
-            'fixer': '🔧',
-            'quality': '✅',
+            'technical_lead': '🧑‍💼',
+            'task_manager': '📊',
             'docs': '📚',
             'user': '👤',
             'tool': '🛠️',
+            'handoff': '🔄',
+            'authority': '👑',
             'system': '📋'
         }
         
@@ -47,22 +49,26 @@ class CodeDevelopmentViewer:
         self.seen_ids = set()
         self.last_handoff = None
         self.agent_stats = {}
+        self.handoff_count = 0
+        self.authority_decisions = 0
+        self.task_updates = 0
         
         # Ensure logs directory exists
         self.logs_dir = Path('logs')
         self.logs_dir.mkdir(exist_ok=True)
         
     def print_header(self):
-        """Print enhanced conversation header"""
+        """Print enhanced conversation header for hierarchical system"""
         print("\n" + "="*100)
-        print("🚀 LIVE ENTERPRISE CODE DEVELOPMENT - 7 AI AGENT COLLABORATION")
+        print("🚀 HIERARCHICAL ENTERPRISE CODE DEVELOPMENT - 6 AI AGENT COLLABORATION")
         print("="*100)
-        print("🏗️ ARCHITECT: Cyan  |  ✍️ WRITER: Blue     |  ⚡ EXECUTOR: Green   |  🔍 ANALYZER: Yellow")
-        print("🔧 FIXER: Magenta   |  ✅ QUALITY: Red     |  📚 DOCS: White      |  👤 USER: Gray")
-        print("🛠️ TOOLS: Purple    |  📋 SYSTEM: Light Gray")
+        print("🏗️ ARCHITECT: Cyan    |  ✍️ WRITER: Blue      |  ⚡ EXECUTOR: Green")
+        print("🧑‍💼 TECH LEAD: Red    |  📊 TASK MGR: Yellow  |  📚 DOCS: White")
+        print("🛠️ TOOLS: Purple      |  🔄 HANDOFFS: Orange  |  👑 AUTHORITY: Bold Red")
         print("="*100)
-        print("WORKFLOW: Architect → Writer → Executor → Analyzer → Fixer → Quality → Docs")
-        print("ROLE SEPARATION: Only Writer & Fixer can write code")
+        print("HIERARCHY: Technical Lead has AUTHORITY over all agents")
+        print("CODE WRITER: Only Writer creates and fixes ALL code")
+        print("TASK TRACKING: Task Manager updates only per Technical Lead directive")
         print("="*100 + "\n")
     
     def extract_text_content(self, content):
@@ -85,20 +91,32 @@ class CodeDevelopmentViewer:
         
         return str(content).strip()
     
-    def format_and_print(self, agent_name: str, content: str, icon: str = None):
-        """Enhanced message formatting with agent-specific styling"""
+    def format_and_print(self, agent_name: str, content: str, icon: str = None, is_authority: bool = False):
+        """Enhanced message formatting with hierarchy and authority visualization"""
         if not content or content in ["[]", "", "None"]:
             return
         
         timestamp = datetime.now().strftime("%H:%M:%S")
-        color = self.colors.get(agent_name, self.colors['system'])
-        agent_icon = icon or self.agent_icons.get(agent_name, "💬")
+        
+        # Special handling for Technical Lead authority decisions
+        if is_authority or (agent_name == 'technical_lead' and any(keyword in content.lower() 
+            for keyword in ['directive', 'decision', 'authority', 'require', 'demand', 'approve', 'reject'])):
+            color = self.colors['authority']
+            agent_icon = '👑'
+            agent_display = f"TECH LEAD [AUTHORITY]"
+            self.authority_decisions += 1
+        else:
+            color = self.colors.get(agent_name, self.colors['system'])
+            agent_icon = icon or self.agent_icons.get(agent_name, "💬")
+            agent_display = agent_name.upper()
         
         # Update agent statistics
         if agent_name not in self.agent_stats:
-            self.agent_stats[agent_name] = {'messages': 0, 'total_chars': 0}
+            self.agent_stats[agent_name] = {'messages': 0, 'total_chars': 0, 'authority_decisions': 0}
         self.agent_stats[agent_name]['messages'] += 1
         self.agent_stats[agent_name]['total_chars'] += len(content)
+        if is_authority:
+            self.agent_stats[agent_name]['authority_decisions'] += 1
         
         # Split content into lines for better formatting
         lines = content.split('\n')
@@ -107,29 +125,55 @@ class CodeDevelopmentViewer:
             if line.strip():
                 if i == 0:
                     # First line with full header
-                    print(f"{color}[{timestamp}] {agent_icon} {agent_name.upper()}: {line}{self.colors['reset']}")
+                    if is_authority:
+                        print(f"{color}[{timestamp}] {agent_icon} {agent_display}: {line}{self.colors['reset']}")
+                    else:
+                        print(f"{color}[{timestamp}] {agent_icon} {agent_display}: {line}{self.colors['reset']}")
                 else:
                     # Continuation lines with proper indentation
                     print(f"{color}{''.ljust(14)}{line}{self.colors['reset']}")
         
         # Record in history with timestamp
-        self.message_history.append((timestamp, agent_name, content))
+        self.message_history.append((timestamp, agent_name, content, is_authority))
     
-    def show_handoff(self, from_agent: str, to_agent: str):
-        """Display enhanced handoff visualization"""
+    def show_handoff(self, from_agent: str, to_agent: str, tool_name: str = None):
+        """Display enhanced handoff visualization with hierarchy awareness"""
         handoff_key = f"{from_agent}->{to_agent}"
         if handoff_key != self.last_handoff:
             self.last_handoff = handoff_key
+            self.handoff_count += 1
             
             from_icon = self.agent_icons.get(from_agent, "🤖")
             to_icon = self.agent_icons.get(to_agent, "🤖")
             
-            print(f"\n{self.colors['system']}{'─'*80}")
-            print(f"🔄 HANDOFF: {from_icon} {from_agent.upper()} → {to_icon} {to_agent.upper()}")
-            print(f"{'─'*80}{self.colors['reset']}\n")
+            # Special visualization for Technical Lead involvement
+            if to_agent == 'technical_lead':
+                print(f"\n{self.colors['authority']}{'═'*80}")
+                print(f"👑 ESCALATION TO TECHNICAL LEAD #{self.handoff_count}: {from_icon} {from_agent.upper()} → {to_icon} TECH LEAD")
+                print(f"   📋 Seeking authority guidance and validation")
+                print(f"{'═'*80}{self.colors['reset']}\n")
+            elif from_agent == 'technical_lead':
+                print(f"\n{self.colors['authority']}{'═'*80}")
+                print(f"👑 TECHNICAL LEAD DIRECTIVE #{self.handoff_count}: {from_icon} TECH LEAD → {to_icon} {to_agent.upper()}")
+                print(f"   📋 Authority decision and direction")
+                print(f"{'═'*80}{self.colors['reset']}\n")
+            else:
+                print(f"\n{self.colors['handoff']}{'─'*80}")
+                print(f"🔄 HANDOFF #{self.handoff_count}: {from_icon} {from_agent.upper()} → {to_icon} {to_agent.upper()}")
+                if tool_name:
+                    print(f"   📞 Using: {tool_name}")
+                print(f"{'─'*80}{self.colors['reset']}\n")
+    
+    def show_task_update(self, content: str):
+        """Special visualization for task updates"""
+        if 'task' in content.lower() and ('update' in content.lower() or 'status' in content.lower()):
+            self.task_updates += 1
+            print(f"\n{self.colors['task_manager']}📊 TASK UPDATE #{self.task_updates}:")
+            print(f"   {content[:100]}{'...' if len(content) > 100 else ''}")
+            print(f"{'─'*60}{self.colors['reset']}\n")
     
     def process_message(self, msg, current_agent):
-        """Enhanced message processing for 7-agent system with error handling"""
+        """Enhanced message processing for hierarchical 6-agent system"""
         try:
             # Get message ID to avoid duplicates
             msg_id = None
@@ -150,17 +194,33 @@ class CodeDevelopmentViewer:
                 name = getattr(msg, 'name', current_agent)
                 tool_calls = getattr(msg, 'tool_calls', [])
                 
+                # Check for authority decisions
+                is_authority = (name == 'technical_lead' and any(keyword in content.lower() 
+                    for keyword in ['directive', 'decision', 'authority', 'require', 'demand', 'approve', 'reject']))
+                
                 # Display agent message if there's content
                 if content:
                     text = self.extract_text_content(content)
                     if text and not any(skip in text.lower() for skip in ['transfer_to_', 'successfully transferred']):
-                        self.format_and_print(name, text)
+                        self.format_and_print(name, text, is_authority=is_authority)
+                        
+                        # Check for task updates
+                        if name == 'task_manager':
+                            self.show_task_update(text)
                 
-                # Display tool calls (except transfers)
+                # Display tool calls with special handling for authority and handoffs
                 if tool_calls:
                     for tc in tool_calls:
                         tool_name = tc.get('name', 'unknown')
-                        if not tool_name.startswith('transfer_to_'):
+                        if tool_name.startswith('transfer_to_'):
+                            # This is a handoff tool call
+                            target_agent = tool_name.replace('transfer_to_', '')
+                            if name == 'technical_lead':
+                                self.format_and_print(name, f"👑 DIRECTING {target_agent.upper()} to proceed", is_authority=True)
+                            else:
+                                self.format_and_print(name, f"🔄 Requesting handoff to {target_agent.upper()}")
+                        else:
+                            # Regular tool call
                             self.format_and_print(name, f"🔧 Using tool: {tool_name}")
                 return
             
@@ -169,18 +229,18 @@ class CodeDevelopmentViewer:
                 content = msg.content
                 tool_name = msg.name
                 
-                # Handle transfers with enhanced visualization
+                # Handle handoff completions with enhanced visualization
                 if tool_name.startswith('transfer_to_') and 'Successfully transferred' in content:
                     target = tool_name.replace('transfer_to_', '')
-                    self.show_handoff(current_agent, target)
+                    self.show_handoff(current_agent, target, tool_name)
                     return
                 
                 # Show enhanced tool results
                 if content and self._is_important_tool_result(tool_name, content):
                     # Truncate very long outputs for readability
                     lines = content.strip().split('\n')
-                    if len(lines) > 10:
-                        result_text = '\n'.join(lines[:10]) + f"\n... ({len(lines)-10} more lines)"
+                    if len(lines) > 12:
+                        result_text = '\n'.join(lines[:12]) + f"\n... ({len(lines)-12} more lines)"
                     else:
                         result_text = content.strip()
                     
@@ -206,17 +266,17 @@ class CodeDevelopmentViewer:
                 if role == 'tool':
                     tool_name = name or 'unknown_tool'
                     
-                    # Handle transfers
+                    # Handle handoff completions
                     if tool_name.startswith('transfer_to_') and 'Successfully transferred' in content:
                         target = tool_name.replace('transfer_to_', '')
-                        self.show_handoff(current_agent, target)
+                        self.show_handoff(current_agent, target, tool_name)
                         return
                     
                     # Show other tool results
                     if content and self._is_important_tool_result(tool_name, content):
                         lines = content.strip().split('\n')
-                        if len(lines) > 10:
-                            result_text = '\n'.join(lines[:10]) + f"\n... ({len(lines)-10} more lines)"
+                        if len(lines) > 12:
+                            result_text = '\n'.join(lines[:12]) + f"\n... ({len(lines)-12} more lines)"
                         else:
                             result_text = content.strip()
                         
@@ -225,12 +285,18 @@ class CodeDevelopmentViewer:
                     return
                 
                 # Agent messages with name
-                agent_names = ['architect', 'writer', 'executor', 'analyzer', 'fixer', 'quality', 'docs']
+                agent_names = ['architect', 'writer', 'executor', 'technical_lead', 'task_manager', 'docs']
                 if name in agent_names:
                     if content:
                         text = self.extract_text_content(content)
                         if text and not any(skip in text.lower() for skip in ['transfer_to_', 'successfully transferred']):
-                            self.format_and_print(name, text)
+                            is_authority = (name == 'technical_lead' and any(keyword in text.lower() 
+                                for keyword in ['directive', 'decision', 'authority', 'require', 'demand', 'approve', 'reject']))
+                            self.format_and_print(name, text, is_authority=is_authority)
+                            
+                            # Check for task updates
+                            if name == 'task_manager':
+                                self.show_task_update(text)
                     return
                     
         except Exception as e:
@@ -247,10 +313,15 @@ class CodeDevelopmentViewer:
             'create_project_structure', 'install_missing_packages'
         ]
         
+        # Don't show handoff tool results (handled separately)
+        if tool_name.startswith('transfer_to_'):
+            return False
+        
         return (tool_name in important_tools or 
                 '✅' in content or '❌' in content or 
                 'ERROR' in content.upper() or 
-                'SUCCESS' in content.upper())
+                'SUCCESS' in content.upper() or
+                'TASK' in content.upper())
     
     def _categorize_tool(self, tool_name: str) -> str:
         """Categorize tools for better display"""
@@ -265,10 +336,15 @@ class CodeDevelopmentViewer:
             'install_missing_packages': '📦',
             'backup_code': '💾'
         }
+        
+        # Special handling for handoff tools
+        if tool_name.startswith('transfer_to_'):
+            return '🔄'
+            
         return categories.get(tool_name, '🛠️')
     
     def run(self, graph, initial_message: str):
-        """Run enhanced conversation with improved error handling"""
+        """Run enhanced conversation with hierarchical system visualization"""
         self.print_header()
         
         # Show initial message
@@ -309,55 +385,72 @@ class CodeDevelopmentViewer:
             print(f"\n{self.colors['system']}⏹️ Development session interrupted by user{self.colors['reset']}")
         except Exception as e:
             print(f"\n{self.colors['tool']}❌ System Error: {e}{self.colors['reset']}")
-            print(f"{self.colors['tool']}💡 This may be a LangGraph compatibility issue{self.colors['reset']}")
-            
-            # Try to provide some helpful information
-            if "ParentCommand" in str(e):
-                print(f"{self.colors['tool']}🔧 ParentCommand error detected - this is usually a handoff issue{self.colors['reset']}")
-                print(f"{self.colors['tool']}💡 The handoff tools have been fixed to resolve this{self.colors['reset']}")
-                print(f"{self.colors['tool']}🔄 Try running the system again{self.colors['reset']}")
+            print(f"{self.colors['tool']}💡 This may be a handoff tool or LangGraph compatibility issue{self.colors['reset']}")
             
             if os.environ.get("DEBUG", "").lower() == "true":
                 import traceback
                 traceback.print_exc()
         
         execution_time = time.time() - start_time
-        print(f"\n{self.colors['system']}✅ Development session completed in {execution_time:.1f} seconds!{self.colors['reset']}")
+        print(f"\n{self.colors['system']}✅ Hierarchical development session completed in {execution_time:.1f} seconds!{self.colors['reset']}")
         self.print_enhanced_summary()
     
     def print_enhanced_summary(self):
-        """Print comprehensive session summary"""
-        print(f"\n{self.colors['system']}📊 DEVELOPMENT SESSION SUMMARY:")
+        """Print comprehensive session summary with hierarchical statistics"""
+        print(f"\n{self.colors['system']}📊 HIERARCHICAL DEVELOPMENT SESSION SUMMARY:")
         print("=" * 70)
         
-        # Agent participation
-        print("🤖 Agent Participation:")
+        # Agent participation with hierarchy awareness
+        print("🤖 Agent Participation & Hierarchy:")
         for agent, stats in sorted(self.agent_stats.items()):
             if agent != 'tool':
                 icon = self.agent_icons.get(agent, "🤖")
                 color = self.colors.get(agent, self.colors['system'])
                 avg_length = stats['total_chars'] / max(1, stats['messages'])
                 
-                # Show if agent can write code
-                code_writer = " (writes code)" if agent in ['writer', 'fixer'] else " (read-only)"
+                # Show agent role and capabilities
+                if agent == 'technical_lead':
+                    role_info = " (AUTHORITY - guides all agents)"
+                    if stats.get('authority_decisions', 0) > 0:
+                        role_info += f" [{stats['authority_decisions']} decisions]"
+                elif agent == 'writer':
+                    role_info = " (ONLY code writer - creates & fixes)"
+                elif agent == 'task_manager':
+                    role_info = " (task tracking per Tech Lead directive)"
+                elif agent in ['architect', 'executor']:
+                    role_info = " (read-only, reports to Tech Lead)"
+                else:
+                    role_info = " (reports to Tech Lead)"
                 
                 print(f"{color}  {icon} {agent.upper()}: {stats['messages']} messages "
-                      f"({avg_length:.0f} avg chars){code_writer}{self.colors['reset']}")
+                      f"({avg_length:.0f} avg chars){role_info}{self.colors['reset']}")
         
         # Tool usage
-        tool_messages = sum(1 for _, agent, _ in self.message_history if agent == 'tool')
+        tool_messages = sum(1 for _, agent, _, _ in self.message_history if agent == 'tool')
         if tool_messages > 0:
             print(f"🛠️ Tool operations: {tool_messages}")
         
+        # Hierarchical statistics
+        if self.handoff_count > 0:
+            print(f"🔄 Agent handoffs: {self.handoff_count}")
+        
+        if self.authority_decisions > 0:
+            print(f"👑 Technical Lead authority decisions: {self.authority_decisions}")
+            
+        if self.task_updates > 0:
+            print(f"📊 Task status updates: {self.task_updates}")
+        
         print(f"📈 Total exchanges: {len(self.message_history)}")
-        print(f"📝 Role separation: Only Writer & Fixer can write code")
+        print(f"📝 Role separation: Only Writer creates and fixes code")
+        print(f"🧑‍💼 Authority structure: Technical Lead oversees all work")
+        print(f"📊 Task management: Updates only per Technical Lead directive")
         print(f"{self.colors['reset']}")
     
     def save_log(self, filename=None):
-        """Save enhanced development session log"""
+        """Save enhanced development session log with hierarchical information"""
         if not filename:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"development_session_{timestamp}.txt"
+            filename = f"hierarchical_session_{timestamp}.txt"
         
         log_file = self.logs_dir / filename
         
@@ -367,45 +460,75 @@ class CodeDevelopmentViewer:
             
         try:
             with open(log_file, 'w', encoding='utf-8') as f:
-                f.write("ENTERPRISE CODE DEVELOPMENT SESSION LOG\n")
-                f.write("7-Agent Collaborative Development System with Role Separation\n")
+                f.write("HIERARCHICAL ENTERPRISE CODE DEVELOPMENT SESSION LOG\n")
+                f.write("6-Agent Collaborative Development System with Technical Lead Authority\n")
                 f.write("=" * 80 + "\n")
                 f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write("=" * 80 + "\n\n")
                 
-                f.write("AGENT WORKFLOW:\n")
-                f.write("🏗️ Architect → ✍️ Writer → ⚡ Executor → 🔍 Analyzer → 🔧 Fixer → ✅ Quality → 📚 Docs\n")
-                f.write("ROLE SEPARATION: Only Writer & Fixer can write code\n\n")
+                f.write("HIERARCHICAL WORKFLOW:\n")
+                f.write("🏗️ Architect → 🧑‍💼 Technical Lead → ✍️ Writer → ⚡ Executor → 🧑‍💼 Technical Lead → 📚 Docs\n")
+                f.write("                     ↕️                                          ↕️\n")
+                f.write("                 📊 Task Manager                            📊 Task Manager\n\n")
+                f.write("HIERARCHY: Technical Lead has AUTHORITY over all agents\n")
+                f.write("ROLE SEPARATION: Only Writer creates and fixes ALL code\n")
+                f.write("TASK TRACKING: Task Manager updates only per Technical Lead directive\n\n")
                 
-                for timestamp, agent, message in self.message_history:
+                for timestamp, agent, message, is_authority in self.message_history:
                     icon = self.agent_icons.get(agent, "🤖")
-                    code_writer = " (CODE WRITER)" if agent in ['writer', 'fixer'] else ""
-                    f.write(f"[{timestamp}] {icon} {agent.upper()}{code_writer}:\n")
+                    
+                    if agent == 'technical_lead':
+                        if is_authority:
+                            role_marker = " (AUTHORITY DECISION)"
+                        else:
+                            role_marker = " (TECHNICAL LEAD)"
+                    elif agent == 'writer':
+                        role_marker = " (ONLY CODE WRITER)"
+                    elif agent == 'task_manager':
+                        role_marker = " (TASK TRACKING)"
+                    else:
+                        role_marker = ""
+                    
+                    f.write(f"[{timestamp}] {icon} {agent.upper()}{role_marker}:\n")
                     f.write(f"{message}\n")
                     f.write("-" * 60 + "\n\n")
                 
                 # Add enhanced summary
-                f.write("\nSESSION SUMMARY:\n")
+                f.write("\nHIERARCHICAL SESSION SUMMARY:\n")
                 f.write("=" * 40 + "\n")
-                f.write(f"Total messages: {len(self.message_history)}\n\n")
+                f.write(f"Total messages: {len(self.message_history)}\n")
+                f.write(f"Agent handoffs: {self.handoff_count}\n")
+                f.write(f"Technical Lead authority decisions: {self.authority_decisions}\n")
+                f.write(f"Task status updates: {self.task_updates}\n\n")
                 
                 f.write("Agent Participation:\n")
                 for agent, stats in sorted(self.agent_stats.items()):
                     if agent != 'tool':
                         icon = self.agent_icons.get(agent, "🤖")
-                        code_writer = " (writes code)" if agent in ['writer', 'fixer'] else " (read-only)"
-                        f.write(f"{icon} {agent.upper()}: {stats['messages']} messages{code_writer}\n")
+                        
+                        if agent == 'technical_lead':
+                            role_info = " (AUTHORITY)"
+                        elif agent == 'writer':
+                            role_info = " (only code writer)"
+                        elif agent == 'task_manager':
+                            role_info = " (task tracking)"
+                        else:
+                            role_info = " (reports to Tech Lead)"
+                            
+                        f.write(f"{icon} {agent.upper()}: {stats['messages']} messages{role_info}\n")
                 
-                tool_messages = sum(1 for _, agent, _ in self.message_history if agent == 'tool')
+                tool_messages = sum(1 for _, agent, _, _ in self.message_history if agent == 'tool')
                 if tool_messages > 0:
                     f.write(f"🛠️ Tool operations: {tool_messages}\n")
                 
-                f.write(f"\nRole Separation Enforced:\n")
-                f.write(f"✅ Code Writers: Writer, Fixer\n")
-                f.write(f"❌ Read-Only: Architect, Executor, Analyzer, Quality\n")
-                f.write(f"📄 Documentation: Docs\n")
+                f.write(f"\nHierarchical System Features:\n")
+                f.write(f"👑 Technical Lead Authority: Oversight and decision-making\n")
+                f.write(f"✅ Single Code Writer: Writer handles ALL code creation and fixing\n")
+                f.write(f"📊 Organized Task Tracking: Updates only per Technical Lead directive\n")
+                f.write(f"🔄 Hierarchical Handoffs: All agents report to Technical Lead\n")
+                f.write(f"🎯 Clear Authority Structure: Technical Lead guides all work\n")
             
-            print(f"💾 Development session log saved to: {log_file}")
+            print(f"💾 Hierarchical development session log saved to: {log_file}")
             return str(log_file)
             
         except Exception as e:

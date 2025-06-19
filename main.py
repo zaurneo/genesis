@@ -1,10 +1,14 @@
-# main.py - FINAL FIXED VERSION with proper graph routing
+# main.py - 6-AGENT HIERARCHICAL SYSTEM with Technical Lead Authority
 """
-Enhanced Multi-Agent Enterprise Code Development System with 7 Specialized Agents:
+Streamlined 6-Agent Enterprise Code Development System:
 
-🏗️ Architect → ✍️ Writer → ⚡ Executor → 🔍 Analyzer → 🔧 Fixer → ✅ Quality → 📚 Docs
+🏗️ Architect → 🧑‍💼 Technical Lead → ✍️ Writer → ⚡ Executor → 🧑‍💼 Technical Lead → 📚 Docs
+                     ↕️                                          ↕️
+                 📊 Task Manager                            📊 Task Manager
 
-FINAL FIX: Proper LangGraph routing with conditional edges for handoffs
+HIERARCHICAL: Technical Lead has authority and oversight over all agents
+STREAMLINED: Writer handles both creation and fixing, removing redundant agents
+ORGANIZED: Task Manager tracks all work in table format per Technical Lead directives
 """
 
 import os
@@ -18,84 +22,12 @@ from langgraph.graph import StateGraph, START, END, MessagesState
 
 # Import enhanced conversation viewer
 from conversation_viewer import CodeDevelopmentViewer
-from agents import architect, writer, executor, analyzer, fixer, quality, docs
+from agents import architect, writer, executor, technical_lead, task_manager, docs
 
 load_dotenv()
 
-def route_after_architect(state: MessagesState):
-    """Route after architect based on last message"""
-    messages = state.get("messages", [])
-    if not messages:
-        return "writer"
-    
-    last_message = messages[-1]
-    # Check if architect wants to transfer to writer
-    if hasattr(last_message, 'content') and last_message.content:
-        content = str(last_message.content).lower()
-        if "writer" in content or "passed to the writer" in content or "transfer" in content:
-            return "writer"
-    
-    # Check for tool calls that transfer to writer
-    if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
-        for tool_call in last_message.tool_calls:
-            if tool_call.get('name') == 'transfer_to_writer':
-                return "writer"
-    
-    return "writer"  # Default to writer
-
-def route_after_writer(state: MessagesState):
-    """Route after writer - should go to executor"""
-    return "executor"
-
-def route_after_executor(state: MessagesState):
-    """Route after executor based on results"""
-    messages = state.get("messages", [])
-    if not messages:
-        return "quality"
-    
-    last_message = messages[-1]
-    if hasattr(last_message, 'content') and last_message.content:
-        content = str(last_message.content).lower()
-        if "error" in content or "failed" in content or "missing" in content:
-            if "missing" in content and "test" in content:
-                return "writer"  # Missing tests -> back to writer
-            else:
-                return "analyzer"  # Errors -> analyzer
-        elif "success" in content or "passed" in content:
-            return "quality"  # Success -> quality
-    
-    return "quality"  # Default to quality
-
-def route_after_analyzer(state: MessagesState):
-    """Route after analyzer - should go to fixer"""
-    return "fixer"
-
-def route_after_fixer(state: MessagesState):
-    """Route after fixer - back to executor for testing"""
-    return "executor"
-
-def route_after_quality(state: MessagesState):
-    """Route after quality - should go to docs if good, or fixer if issues"""
-    messages = state.get("messages", [])
-    if not messages:
-        return "docs"
-    
-    last_message = messages[-1]
-    if hasattr(last_message, 'content') and last_message.content:
-        content = str(last_message.content).lower()
-        if "issue" in content or "problem" in content or "failed" in content:
-            return "fixer"  # Issues -> fixer
-        else:
-            return "docs"  # Good -> docs
-    
-    return "docs"  # Default to docs
-
-def route_after_docs(state: MessagesState):
-    """Route after docs - end the workflow"""
-    return END
-
-class EnhancedCodeDevelopmentSystem:
-    """Enterprise-grade code development system with 7 specialized agents"""
+class HierarchicalCodeDevelopmentSystem:
+    """Enterprise-grade code development system with Technical Lead authority and task tracking"""
     
     def __init__(self):
         self.graph = None
@@ -109,7 +41,7 @@ class EnhancedCodeDevelopmentSystem:
             'workspace',           # Main development workspace
             'workspace/projects',  # Individual projects
             'workspace/backups',   # Code backups
-            'workspace/tests',     # Test files
+            'workspace/tasks',     # Task tracking files
             'logs',               # Development session logs
             'templates',          # Code templates
         ]
@@ -121,79 +53,38 @@ class EnhancedCodeDevelopmentSystem:
         print(f"📁 Workspace: {Path('workspace').absolute()}")
     
     def setup_graph(self):
-        """Initialize the 7-agent development graph with PROPER ROUTING"""
-        print("🔧 Building enterprise 7-agent development system with conditional routing...")
+        """Initialize the 6-agent hierarchical development graph"""
+        print("🔧 Building hierarchical 6-agent development system with Technical Lead authority...")
         
         try:
-            # Build graph with conditional edges for proper handoffs
+            # Build hierarchical graph - Technical Lead has oversight
             workflow = StateGraph(MessagesState)
             
             # Add all agent nodes
             workflow.add_node("architect", architect)
             workflow.add_node("writer", writer)
             workflow.add_node("executor", executor)
-            workflow.add_node("analyzer", analyzer)
-            workflow.add_node("fixer", fixer)
-            workflow.add_node("quality", quality)
+            workflow.add_node("technical_lead", technical_lead)
+            workflow.add_node("task_manager", task_manager)
             workflow.add_node("docs", docs)
             
-            # Set entry point
+            # Set entry point - always start with architect
             workflow.add_edge(START, "architect")
             
-            # Add conditional edges for proper routing
-            workflow.add_conditional_edges(
-                "architect",
-                route_after_architect,
-                {"writer": "writer"}
-            )
-            
-            workflow.add_conditional_edges(
-                "writer", 
-                route_after_writer,
-                {"executor": "executor"}
-            )
-            
-            workflow.add_conditional_edges(
-                "executor",
-                route_after_executor,
-                {
-                    "writer": "writer",      # Missing tests -> writer
-                    "analyzer": "analyzer",  # Errors -> analyzer
-                    "quality": "quality"     # Success -> quality
-                }
-            )
-            
-            workflow.add_conditional_edges(
-                "analyzer",
-                route_after_analyzer,
-                {"fixer": "fixer"}
-            )
-            
-            workflow.add_conditional_edges(
-                "fixer",
-                route_after_fixer,
-                {"executor": "executor"}  # Back to executor for testing
-            )
-            
-            workflow.add_conditional_edges(
-                "quality",
-                route_after_quality,
-                {
-                    "fixer": "fixer",    # Issues -> fixer
-                    "docs": "docs"       # Good -> docs
-                }
-            )
-            
-            workflow.add_conditional_edges(
-                "docs",
-                route_after_docs,
-                {END: END}
-            )
+            # Simple edges - agents use handoff tools to control routing
+            # Technical Lead can redirect any workflow
+            workflow.add_edge("architect", END)
+            workflow.add_edge("writer", END) 
+            workflow.add_edge("executor", END)
+            workflow.add_edge("technical_lead", END)
+            workflow.add_edge("task_manager", END)
+            workflow.add_edge("docs", END)
             
             # Compile the workflow
             self.graph = workflow.compile()
             
-            print("✅ 7-agent development graph with conditional routing created successfully!")
+            print("✅ 6-agent hierarchical development graph created successfully!")
+            print("🧑‍💼 Technical Lead has authority over all workflow decisions!")
             
         except Exception as e:
             print(f"❌ Error creating graph: {e}")
@@ -205,58 +96,61 @@ class EnhancedCodeDevelopmentSystem:
         """Get comprehensive demo project examples"""
         return [
             """Create a professional web scraper with error handling, rate limiting, data validation, 
-            and comprehensive testing. Include proper project structure, documentation, and security checks.""",
+            comprehensive testing, and proper task tracking. Include security best practices and 
+            performance monitoring.""",
             
             """Build a complete REST API with Flask that includes user authentication, data validation, 
-            error handling, logging, testing, and comprehensive documentation. Use proper project structure 
-            and follow security best practices.""",
+            error handling, logging, comprehensive testing, and detailed documentation. Follow enterprise 
+            standards with proper task management.""",
             
             """Develop a data analysis pipeline that reads CSV files, performs statistical analysis, 
-            generates visualizations, and exports results. Include error handling, testing, 
-            performance optimization, and complete documentation.""",
+            generates visualizations, and exports results. Include comprehensive error handling, testing, 
+            performance optimization, and task tracking throughout development.""",
             
             """Create a command-line tool for file organization with features like duplicate detection, 
             batch operations, logging, and configuration management. Include comprehensive testing, 
-            documentation, and proper error handling.""",
+            documentation, and proper project management with task tracking.""",
             
             """Build a machine learning model training system with data preprocessing, model selection, 
-            evaluation metrics, and prediction API. Include proper project structure, testing, 
-            documentation, and performance monitoring.""",
+            evaluation metrics, and prediction API. Include proper project structure, comprehensive testing, 
+            documentation, and task management with Technical Lead oversight.""",
             
             """Develop a monitoring dashboard that tracks system metrics, sends alerts, and provides 
-            visualization. Include database integration, real-time updates, testing, security, 
-            and comprehensive documentation.""",
+            real-time visualization. Include database integration, security features, testing, and 
+            comprehensive task tracking with Technical Lead validation.""",
             
-            """Create a complete package/library with proper setup.py, documentation, testing, 
-            CI/CD configuration, and publishing preparation. Follow all Python packaging best practices."""
+            """Create a complete Python package/library with proper setup.py, comprehensive documentation, 
+            testing, CI/CD configuration, and publishing preparation. Follow all enterprise best practices 
+            with detailed task management and Technical Lead oversight."""
         ]
     
     def run_interactive_demo(self):
         """Run interactive development demonstration"""
-        print("🚀 ENTERPRISE CODE DEVELOPMENT SYSTEM")
+        print("🚀 HIERARCHICAL ENTERPRISE CODE DEVELOPMENT SYSTEM")
         print("=" * 80)
-        print("🎯 POWERED BY: 7 Specialized AI Agents + Conditional Routing")
-        print("📝 ROLE SEPARATION: Only Writer & Fixer can write code")
-        print("🔄 SMART ROUTING: Agents hand off based on context")
+        print("🧑‍💼 TECHNICAL LEAD AUTHORITY: Experienced leader guides and validates all work")
+        print("📝 SINGLE CODE WRITER: Only Writer creates and fixes ALL code")
+        print("📊 TASK TRACKING: Task Manager maintains organized progress tables")
+        print("🔄 HIERARCHICAL HANDOFFS: All agents report to Technical Lead")
         print("=" * 80)
-        print("This system will:")
-        print("1. 🏗️ Design proper project architecture and structure")
-        print("2. ✍️ Write clean, professional, enterprise-grade code")
-        print("3. ⚡ Execute code with performance monitoring")
-        print("4. 🔍 Analyze any errors with root cause analysis")
-        print("5. 🔧 Fix errors and improve code quality automatically")
-        print("6. ✅ Ensure code quality, security, and best practices")
-        print("7. 📚 Generate comprehensive documentation")
-        print("8. 🧪 Create and run tests intelligently")
-        print("9. 📊 Monitor performance and resource usage")
-        print("10. 🔒 Perform security vulnerability scanning")
+        print("This system demonstrates:")
+        print("1. 🏗️ Professional project architecture and structure planning")
+        print("2. 🧑‍💼 Technical Lead oversight with authority and experience")
+        print("3. ✍️ Unified code creation and fixing by expert Writer")
+        print("4. ⚡ Comprehensive code execution and performance testing")
+        print("5. 📊 Organized task tracking and status management")
+        print("6. 📚 Complete documentation generation and validation")
+        print("7. 🔒 Security scanning and quality assurance")
+        print("8. 📈 Performance monitoring and optimization")
+        print("9. 🧪 Intelligent test creation and execution")
+        print("10. 🎯 Authoritative guidance and decision-making")
         print("=" * 80)
         
         demo_projects = self.get_demo_projects()
         
         print("\n🎯 Available Enterprise Demo Projects:")
         for i, project in enumerate(demo_projects, 1):
-            clean_desc = ' '.join(project.split()[:12]) + "..."
+            clean_desc = ' '.join(project.split()[:15]) + "..."
             print(f"{i}. {clean_desc}")
         
         # Get user choice
@@ -281,7 +175,7 @@ class EnhancedCodeDevelopmentSystem:
             print("Using default project...")
             selected_project = demo_projects[0]
         
-        print(f"\n🎮 Starting Enterprise Development Project:")
+        print(f"\n🎮 Starting Hierarchical Enterprise Development Project:")
         print("=" * 80)
         print(f"📋 {selected_project}")
         print("=" * 80)
@@ -291,37 +185,37 @@ class EnhancedCodeDevelopmentSystem:
         
         # Save development log
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        log_path = self.viewer.save_log(f"enterprise_dev_{timestamp}.txt")
+        log_path = self.viewer.save_log(f"hierarchical_dev_{timestamp}.txt")
         
         self.show_results(log_path)
     
     def run_quick_development(self, request: str):
         """Run quick development for simple requests"""
-        print(f"⚡ Quick Development Mode:")
+        print(f"⚡ Quick Hierarchical Development Mode:")
         print(f"Request: {request}")
         print("=" * 60)
         
         self.viewer.run(self.graph, request)
         
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        log_path = self.viewer.save_log(f"quick_dev_{timestamp}.txt")
+        log_path = self.viewer.save_log(f"quick_hierarchical_{timestamp}.txt")
         
         self.show_results(log_path)
     
     def show_results(self, log_path=None):
         """Display comprehensive development results"""
         print("\n" + "=" * 80)
-        print("🎉 ENTERPRISE DEVELOPMENT SESSION COMPLETED!")
+        print("🎉 HIERARCHICAL ENTERPRISE DEVELOPMENT SESSION COMPLETED!")
         print("=" * 80)
         print("The system has demonstrated:")
+        print("✅ Technical Lead authority and oversight throughout development")
         print("✅ Professional project architecture and design")
-        print("✅ Clean, enterprise-grade code generation")
-        print("✅ Comprehensive error detection and fixing")
-        print("✅ Code quality assurance and security scanning")
-        print("✅ Automated testing and validation")
-        print("✅ Performance monitoring and optimization")
+        print("✅ Unified code creation and fixing by expert Writer")
+        print("✅ Comprehensive testing and performance monitoring")
+        print("✅ Organized task tracking and status management")
+        print("✅ Quality assurance and security scanning")
         print("✅ Complete documentation generation")
-        print("✅ Professional project structure")
+        print("✅ Hierarchical workflow with clear authority structure")
         
         # Show generated files and projects
         print(f"\n📁 Generated Content:")
@@ -339,6 +233,15 @@ class EnhancedCodeDevelopmentSystem:
                     for project in projects[:3]:  # Show first 3
                         print(f"  📦 {project.name}/")
             
+            # Show task files
+            tasks_dir = workspace / "tasks"
+            if tasks_dir.exists():
+                task_files = list(tasks_dir.glob("*.md"))
+                if task_files:
+                    print(f"📊 Task Tracking Files: {len(task_files)}")
+                    for task_file in task_files[:3]:
+                        print(f"  📋 {task_file.name}")
+            
             # Show individual files
             files = list(workspace.glob("*.py"))
             if files:
@@ -353,19 +256,12 @@ class EnhancedCodeDevelopmentSystem:
                 backups = list(backups_dir.glob("*.backup"))
                 if backups:
                     print(f"💾 Code Backups: {len(backups)}")
-            
-            # Show tests
-            tests_dir = workspace / "tests"
-            if tests_dir.exists():
-                tests = list(tests_dir.glob("test_*.py"))
-                if tests:
-                    print(f"🧪 Test Files: {len(tests)}")
         
-        print("\n💡 The 7-agent system collaborated to deliver enterprise-grade code!")
+        print("\n💡 The 6-agent hierarchical system with Technical Lead authority delivered enterprise-grade results!")
     
     def show_system_status(self):
         """Show current system status and capabilities"""
-        print("📊 ENTERPRISE DEVELOPMENT SYSTEM STATUS")
+        print("📊 HIERARCHICAL ENTERPRISE DEVELOPMENT SYSTEM STATUS")
         print("=" * 60)
         
         # Check workspace
@@ -376,15 +272,14 @@ class EnhancedCodeDevelopmentSystem:
             print(f"📁 Workspace files: {len(files)}")
         
         # Show agent capabilities
-        print("\n🤖 Agent Capabilities:")
+        print("\n🤖 Agent Capabilities & Hierarchy:")
         agents = {
-            "🏗️ Architect": "Project design, structure planning, requirements analysis (read-only)",
-            "✍️ Writer": "Code generation, implementation, clean coding practices (writes code)",
-            "⚡ Executor": "Code execution, performance monitoring, dependency management (read-only)",
-            "🔍 Analyzer": "Error diagnosis, root cause analysis, issue categorization (read-only)",
-            "🔧 Fixer": "Error correction, code improvement, backup management (writes code)",
-            "✅ Quality": "Quality assurance, security scanning, testing, standards (read-only)",
-            "📚 Docs": "Documentation generation, guides, API docs, examples (docs only)"
+            "🏗️ Architect": "Project design, structure planning → reports to Technical Lead",
+            "🧑‍💼 Technical Lead": "AUTHORITY over all agents, guides, validates, and makes decisions",
+            "✍️ Writer": "ALL code creation and fixing (only code writer) → reports to Technical Lead",
+            "⚡ Executor": "Code execution, performance monitoring → reports to Technical Lead",
+            "📊 Task Manager": "Task tracking in table format, updates only per Technical Lead directive",
+            "📚 Docs": "Documentation generation → reports to Technical Lead"
         }
         
         for agent, capability in agents.items():
@@ -396,37 +291,41 @@ class EnhancedCodeDevelopmentSystem:
             "Code quality analysis", "Security vulnerability scanning",
             "Intelligent testing", "Performance monitoring", 
             "Dependency management", "Project structure creation",
-            "Code backup/versioning", "Documentation generation"
+            "Code backup/versioning", "Documentation generation",
+            "Task tracking and management", "Technical Lead oversight"
         ]
         
         for tool in tools:
             print(f"  • {tool}")
         
         print(f"\n📝 Role Separation:")
-        print(f"  ✅ Can write code: Writer, Fixer")
-        print(f"  ❌ Read-only: Architect, Executor, Analyzer, Quality")
-        print(f"  📄 Docs only: Docs")
+        print(f"  ✅ Can write code: Writer ONLY")
+        print(f"  🧑‍💼 Authority: Technical Lead has oversight over ALL agents")
+        print(f"  📊 Task updates: Only Task Manager per Technical Lead directive")
+        print(f"  📄 Documentation: Docs agent")
+        print(f"  ❌ Read-only: Architect, Executor")
         
-        print(f"\n🔄 Smart Routing:")
-        print(f"  📐 Architect → Writer (always)")
-        print(f"  📝 Writer → Executor (for testing)")
-        print(f"  ⚡ Executor → Writer (missing tests) | Analyzer (errors) | Quality (success)")
-        print(f"  🔍 Analyzer → Fixer (for fixes)")
-        print(f"  🔧 Fixer → Executor (for re-testing)")
-        print(f"  ✅ Quality → Fixer (issues) | Docs (success)")
-        print(f"  📚 Docs → END (completion)")
+        print(f"\n🏛️ Hierarchical System:")
+        print(f"  🧑‍💼 Technical Lead: AUTHORITY and oversight over all workflow")
+        print(f"  📐 Architect → Technical Lead validation required")
+        print(f"  📝 Writer → Technical Lead guidance and approval")
+        print(f"  ⚡ Executor → Technical Lead evaluation of results")
+        print(f"  📊 Task Manager → Updates only per Technical Lead directive")
+        print(f"  📚 Docs → Technical Lead validation required")
+        print(f"  🎯 All major decisions flow through Technical Lead")
 
 def main():
-    """Main entry point for enhanced development system"""
-    print("🚀 Enterprise Code Development System with 7 AI Agents")
+    """Main entry point for hierarchical development system"""
+    print("🚀 Hierarchical Enterprise Code Development System")
     print("=" * 70)
-    print("🏗️ Architect → ✍️ Writer → ⚡ Executor → 🔍 Analyzer → 🔧 Fixer → ✅ Quality → 📚 Docs")
-    print("📝 Role Separation: Only Writer & Fixer can write code")
-    print("🔄 Smart Conditional Routing: Context-based handoffs")
+    print("🧑‍💼 Technical Lead Authority: Experienced leader with oversight")
+    print("✍️ Single Code Writer: Writer handles ALL code creation and fixing")
+    print("📊 Task Management: Organized tracking per Technical Lead directives")
+    print("🔄 Hierarchical Handoffs: All agents report to Technical Lead")
     print("=" * 70)
     
     # Create system
-    system = EnhancedCodeDevelopmentSystem()
+    system = HierarchicalCodeDevelopmentSystem()
     
     # Parse command line arguments
     if len(sys.argv) > 1:
@@ -446,12 +345,12 @@ def main():
                 system.run_quick_development(request)
             else:
                 print("❌ Please provide a request after --quick")
-                print("Example: python main.py --quick 'create a calculator'")
+                print("Example: python main.py --quick 'create a calculator with tests'")
             return
         
         elif command == "--help":
-            print("🤖 ENTERPRISE DEVELOPMENT SYSTEM - HELP")
-            print("=" * 50)
+            print("🤖 HIERARCHICAL ENTERPRISE DEVELOPMENT SYSTEM - HELP")
+            print("=" * 60)
             print("\nAvailable commands:")
             print("  --demo     : Run full interactive demo")
             print("  --quick    : Quick development mode")
@@ -461,14 +360,16 @@ def main():
             print("  python main.py --demo")
             print("  python main.py --quick 'create a web scraper'")
             print("  python main.py --status")
-            print("\nRole Separation:")
-            print("  📝 Writer: Creates new code and files")
-            print("  🔧 Fixer: Fixes existing code")
-            print("  🔍 Others: Read-only, request code via smart routing")
-            print("\nSmart Routing:")
-            print("  🔄 Context-aware handoffs between agents")
-            print("  📐 Conditional edges based on agent outputs")
-            print("  🎯 Automatic workflow progression")
+            print("\nHierarchical Structure:")
+            print("  🧑‍💼 Technical Lead: Authority over all agents")
+            print("  📝 Writer: Only agent who can write/fix code")
+            print("  📊 Task Manager: Tracks tasks per Technical Lead directives")
+            print("  🔍 Others: Report to Technical Lead for guidance")
+            print("\nKey Features:")
+            print("  🎯 Technical Lead oversight and decision-making")
+            print("  📋 Organized task tracking in table format")
+            print("  🔄 Hierarchical handoffs with clear authority")
+            print("  ✅ Enterprise-grade quality and standards")
             return
         
         else:

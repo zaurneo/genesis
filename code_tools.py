@@ -1,7 +1,7 @@
-# code_tools.py - FINAL FIXED VERSION with path issues resolved
+# code_tools.py - FINAL VERSION with Task Management for Hierarchical 6-Agent System
 """
-Enhanced tools for comprehensive code development, testing, and quality assurance.
-FINAL FIX: Resolved path resolution issues and improved test running logic.
+Enhanced tools for comprehensive code development, testing, quality assurance, and task management.
+Includes task management tools for the hierarchical 6-agent system with Technical Lead authority.
 """
 
 import os
@@ -15,6 +15,305 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from langchain_core.tools import tool
+
+@tool
+def create_task_table(project_name: str, initial_tasks: str = "") -> str:
+    """Create an organized task tracking table for project management
+    
+    Args:
+        project_name: Name of the project for task tracking
+        initial_tasks: Comma-separated list of initial tasks (optional)
+        
+    Returns:
+        Status of task table creation
+    """
+    try:
+        if not project_name or not project_name.strip():
+            return "❌ Error: Project name cannot be empty"
+        
+        workspace = Path("workspace")
+        tasks_dir = workspace / "tasks"
+        tasks_dir.mkdir(exist_ok=True)
+        
+        # Clean project name
+        project_name = project_name.strip().replace(" ", "_").lower()
+        task_file = tasks_dir / f"{project_name}_tasks.md"
+        
+        # Create task table structure
+        task_content = f"""# Task Tracking: {project_name.replace('_', ' ').title()}
+
+**Created:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
+**Technical Lead:** Authorized to update task statuses  
+**Last Updated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## Task Status Legend
+- **Not Started**: Task has been identified but not begun
+- **In Progress**: Task is currently being worked on
+- **Under Review**: Task completed, awaiting Technical Lead review
+- **Completed**: Task finished and approved by Technical Lead
+- **Blocked**: Task cannot proceed due to dependencies
+- **Rework Required**: Task needs to be redone per Technical Lead directive
+
+## Task Table
+
+| Task ID | Description | Assigned To | Priority | Status | Technical Lead Notes | Last Updated |
+|---------|-------------|-------------|----------|--------|---------------------|--------------|
+"""
+        
+        # Add initial tasks if provided
+        if initial_tasks and initial_tasks.strip():
+            task_list = [task.strip() for task in initial_tasks.split(',') if task.strip()]
+            for i, task in enumerate(task_list, 1):
+                task_content += f"| T{i:03d} | {task} | Writer | Medium | Not Started | - | {datetime.now().strftime('%Y-%m-%d %H:%M')} |\n"
+        else:
+            # Add default initial tasks
+            default_tasks = [
+                "Project structure creation",
+                "Core functionality implementation", 
+                "Unit test development",
+                "Integration testing",
+                "Code quality review",
+                "Documentation creation"
+            ]
+            for i, task in enumerate(default_tasks, 1):
+                task_content += f"| T{i:03d} | {task} | TBD | Medium | Not Started | - | {datetime.now().strftime('%Y-%m-%d %H:%M')} |\n"
+        
+        task_content += f"""
+## Task Statistics
+- **Total Tasks**: {len(initial_tasks.split(',')) if initial_tasks else 6}
+- **Completed**: 0
+- **In Progress**: 0
+- **Blocked**: 0
+
+## Notes
+- Only Technical Lead can authorize status changes
+- All task updates must include Technical Lead approval
+- Task assignments can be modified by Technical Lead directive
+"""
+        
+        # Write task file
+        with open(task_file, 'w', encoding='utf-8') as f:
+            f.write(task_content)
+        
+        return f"""
+✅ Task tracking table created successfully!
+
+📊 Task Table Details:
+- Project: {project_name.replace('_', ' ').title()}
+- File: {task_file.relative_to(workspace)}
+- Initial Tasks: {len(initial_tasks.split(',')) if initial_tasks else 6}
+- Authority: Technical Lead controls all status updates
+
+🎯 Next Steps:
+1. Technical Lead reviews and adjusts task breakdown
+2. Task assignments made per Technical Lead directive
+3. Status updates only with Technical Lead authorization
+        """.strip()
+        
+    except Exception as e:
+        return f"❌ Error: Cannot create task table: {str(e)}"
+
+@tool
+def update_task_status(project_name: str, task_id: str, new_status: str, tech_lead_notes: str = "", assigned_to: str = "") -> str:
+    """Update task status - ONLY to be used with Technical Lead authorization
+    
+    Args:
+        project_name: Name of the project
+        task_id: Task ID (e.g., T001)
+        new_status: New status (Not Started, In Progress, Under Review, Completed, Blocked, Rework Required)
+        tech_lead_notes: Technical Lead notes for this update
+        assigned_to: Who the task is assigned to (optional)
+        
+    Returns:
+        Status of task update
+    """
+    try:
+        if not all([project_name, task_id, new_status]):
+            return "❌ Error: Project name, task ID, and new status are required"
+        
+        workspace = Path("workspace")
+        tasks_dir = workspace / "tasks"
+        
+        # Clean inputs
+        project_name = project_name.strip().replace(" ", "_").lower()
+        task_file = tasks_dir / f"{project_name}_tasks.md"
+        
+        if not task_file.exists():
+            return f"❌ Error: Task file for project '{project_name}' not found"
+        
+        # Valid statuses
+        valid_statuses = ["Not Started", "In Progress", "Under Review", "Completed", "Blocked", "Rework Required"]
+        if new_status not in valid_statuses:
+            return f"❌ Error: Invalid status. Valid options: {', '.join(valid_statuses)}"
+        
+        # Read current task file
+        with open(task_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Find and update the specific task
+        lines = content.split('\n')
+        updated = False
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M')
+        
+        for i, line in enumerate(lines):
+            if f"| {task_id} |" in line:
+                # Parse the existing task line
+                parts = [part.strip() for part in line.split('|')]
+                if len(parts) >= 8:
+                    # Update the task line: | Task ID | Description | Assigned To | Priority | Status | Technical Lead Notes | Last Updated |
+                    parts[5] = new_status  # Status
+                    parts[6] = tech_lead_notes or parts[6]  # Technical Lead Notes
+                    parts[7] = current_time  # Last Updated
+                    
+                    if assigned_to:
+                        parts[3] = assigned_to  # Assigned To
+                    
+                    lines[i] = " | ".join(parts) + " |"
+                    updated = True
+                    break
+        
+        if not updated:
+            return f"❌ Error: Task {task_id} not found in project {project_name}"
+        
+        # Update the "Last Updated" timestamp in header
+        for i, line in enumerate(lines):
+            if "**Last Updated:**" in line:
+                lines[i] = f"**Last Updated:** {current_time}"
+                break
+        
+        # Update task statistics
+        status_counts = {"Not Started": 0, "In Progress": 0, "Under Review": 0, 
+                        "Completed": 0, "Blocked": 0, "Rework Required": 0}
+        total_tasks = 0
+        
+        for line in lines:
+            if line.startswith("| T") and "|" in line:
+                parts = [part.strip() for part in line.split('|')]
+                if len(parts) >= 6:
+                    total_tasks += 1
+                    status = parts[5].strip()
+                    if status in status_counts:
+                        status_counts[status] += 1
+        
+        # Update statistics section
+        for i, line in enumerate(lines):
+            if "- **Total Tasks**:" in line:
+                lines[i] = f"- **Total Tasks**: {total_tasks}"
+            elif "- **Completed**:" in line:
+                lines[i] = f"- **Completed**: {status_counts['Completed']}"
+            elif "- **In Progress**:" in line:
+                lines[i] = f"- **In Progress**: {status_counts['In Progress']}"
+            elif "- **Blocked**:" in line:
+                lines[i] = f"- **Blocked**: {status_counts['Blocked']}"
+        
+        # Write updated content
+        with open(task_file, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lines))
+        
+        return f"""
+✅ Task status updated successfully!
+
+📊 Task Update Details:
+- Project: {project_name.replace('_', ' ').title()}
+- Task ID: {task_id}
+- New Status: {new_status}
+- Technical Lead Notes: {tech_lead_notes or 'No additional notes'}
+- Updated: {current_time}
+
+📈 Current Statistics:
+- Total Tasks: {total_tasks}
+- Completed: {status_counts['Completed']}
+- In Progress: {status_counts['In Progress']}
+- Blocked: {status_counts['Blocked']}
+        """.strip()
+        
+    except Exception as e:
+        return f"❌ Error: Cannot update task status: {str(e)}"
+
+@tool
+def get_task_summary(project_name: str) -> str:
+    """Get a summary of current task status for a project
+    
+    Args:
+        project_name: Name of the project
+        
+    Returns:
+        Task summary and statistics
+    """
+    try:
+        if not project_name or not project_name.strip():
+            return "❌ Error: Project name cannot be empty"
+        
+        workspace = Path("workspace")
+        tasks_dir = workspace / "tasks"
+        
+        # Clean project name
+        project_name = project_name.strip().replace(" ", "_").lower()
+        task_file = tasks_dir / f"{project_name}_tasks.md"
+        
+        if not task_file.exists():
+            return f"❌ Error: Task file for project '{project_name}' not found"
+        
+        # Read task file
+        with open(task_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Parse tasks and statistics
+        lines = content.split('\n')
+        tasks = []
+        status_counts = {"Not Started": 0, "In Progress": 0, "Under Review": 0, 
+                        "Completed": 0, "Blocked": 0, "Rework Required": 0}
+        
+        for line in lines:
+            if line.startswith("| T") and "|" in line:
+                parts = [part.strip() for part in line.split('|')]
+                if len(parts) >= 8:
+                    task_info = {
+                        'id': parts[1],
+                        'description': parts[2],
+                        'assigned_to': parts[3],
+                        'priority': parts[4],
+                        'status': parts[5],
+                        'notes': parts[6],
+                        'updated': parts[7]
+                    }
+                    tasks.append(task_info)
+                    if task_info['status'] in status_counts:
+                        status_counts[task_info['status']] += 1
+        
+        # Build summary
+        summary = f"""
+📊 Task Summary for {project_name.replace('_', ' ').title()}:
+{'=' * 50}
+
+📈 Statistics:
+- Total Tasks: {len(tasks)}
+- Completed: {status_counts['Completed']}
+- In Progress: {status_counts['In Progress']}
+- Under Review: {status_counts['Under Review']}
+- Not Started: {status_counts['Not Started']}
+- Blocked: {status_counts['Blocked']}
+- Rework Required: {status_counts['Rework Required']}
+
+🎯 Progress: {(status_counts['Completed'] / max(1, len(tasks)) * 100):.1f}% Complete
+
+📋 Active Tasks:
+"""
+        
+        # Show active tasks (not completed)
+        active_tasks = [t for t in tasks if t['status'] != 'Completed']
+        if active_tasks:
+            for task in active_tasks[:10]:  # Show up to 10 active tasks
+                summary += f"- {task['id']}: {task['description']} [{task['status']}]\n"
+            if len(active_tasks) > 10:
+                summary += f"... and {len(active_tasks) - 10} more active tasks\n"
+        else:
+            summary += "All tasks completed!\n"
+        
+        return summary.strip()
+        
+    except Exception as e:
+        return f"❌ Error: Cannot get task summary: {str(e)}"
 
 @tool
 def run_tests(test_path: str) -> str:
@@ -256,8 +555,6 @@ def write_code_file(filename: str, content: str) -> str:
     except Exception as e:
         return f"❌ Error: Cannot write file '{filename}': {str(e)}"
 
-# Keep all other existing tools with same structure but add the FIXED ones above
-
 @tool
 def create_project_structure(project_name: str, project_type: str = "basic") -> str:
     """Create a proper project structure with improved error handling"""
@@ -475,7 +772,6 @@ coverage.xml
     except Exception as e:
         return f"❌ CRITICAL ERROR: Failed to create project structure: {str(e)}"
 
-# Include all other tools from the previous version
 @tool
 def install_missing_packages(packages: str) -> str:
     """Automatically install missing Python packages"""
@@ -944,15 +1240,20 @@ def backup_code(filename: str) -> str:
     except Exception as e:
         return f"❌ Error: Cannot create backup for '{filename}': {str(e)}"
 
-# Export all tools (REMOVED generate_tests - agents use intelligence now)
+# Export all tools including task management
 __all__ = [
+    # Task management tools for hierarchical system
+    'create_task_table',
+    'update_task_status', 
+    'get_task_summary',
+    
     # Basic tools
     'write_code_file',
     'execute_python_file', 
     'read_file_content',
     'list_workspace_files',
     
-    # Enhanced tools (NO generate_tests - agents use intelligence)
+    # Enhanced tools
     'install_missing_packages',
     'analyze_code_quality',
     'run_tests',
