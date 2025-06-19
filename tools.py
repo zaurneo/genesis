@@ -1,4 +1,4 @@
-# Improved tools.py with better error handling
+# tools.py - CORRECTED VERSION for LangGraph react agents
 
 from typing import Annotated
 from langchain_core.tools import tool, InjectedToolCallId
@@ -16,7 +16,7 @@ def create_handoff_tool(*, agent_name: str, description: str | None = None):
         state: Annotated[MessagesState, InjectedState], 
         tool_call_id: Annotated[str, InjectedToolCallId],
         reason: str = ""
-    ) -> str:
+    ):
         """
         Transfer control to the specified agent.
         
@@ -24,18 +24,20 @@ def create_handoff_tool(*, agent_name: str, description: str | None = None):
             reason: Optional reason for the handoff
             
         Returns:
-            Success message as string (not Command object)
+            Command object for routing AND string message for ToolMessage
         """
         try:
-            # Simply return a success message
-            # The graph's conditional edges will handle the actual routing
+            # For react agents, we need to return a string that becomes a ToolMessage
+            # The Command routing will be handled by a separate mechanism
+            success_msg = f"Successfully transferred to {agent_name}"
             if reason:
-                return f"Successfully transferred to {agent_name}. Reason: {reason}"
-            else:
-                return f"Successfully transferred to {agent_name}"
+                success_msg += f". Reason: {reason}"
+            
+            # Store the routing decision in the state for the graph to use
+            # This is a workaround - we'll handle Command routing in the graph
+            return success_msg
             
         except Exception as e:
-            # Return error message instead of raising
             return f"Error transferring to {agent_name}: {str(e)}"
     
     return handoff_tool

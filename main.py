@@ -1,10 +1,4 @@
-# main.py - 6-AGENT HIERARCHICAL SYSTEM with Technical Lead Authority
-"""
-Streamlined 6-Agent Enterprise Code Development System with fixes for:
-- Single tool call enforcement
-- Proper graph routing
-- Error handling
-"""
+# main.py - FIXED VERSION with proper graph routing
 
 import os
 import sys
@@ -23,7 +17,7 @@ from langgraph.graph import StateGraph, START, END
 # Import enhanced conversation viewer
 from conversation_viewer import CodeDevelopmentViewer
 
-# Import agents - make sure they're properly imported
+# Import agents
 try:
     from agents import architect, writer, executor, technical_lead, task_manager, docs, finalizer
     print("✅ All agents imported successfully")
@@ -33,21 +27,30 @@ except ImportError as e:
 
 load_dotenv()
 
-
-
 # Define state properly
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], "The messages in the conversation"]
 
 def agent_node(state: AgentState, agent, name: str):
-    """Wrapper function for agents to work as nodes"""
-    result = agent.invoke(state)
-    # Extract messages from the result
-    if isinstance(result, dict) and "messages" in result:
-        return {"messages": result["messages"]}
-    # If agent returns Command, it will be handled by graph
-    return result
-
+    """Wrapper function for agents to work as nodes - FIXED VERSION"""
+    try:
+        result = agent.invoke(state)
+        
+        # Handle different return types
+        if isinstance(result, dict):
+            # If it's already a dict with messages, return it
+            if "messages" in result:
+                return {"messages": result["messages"]}
+            # If it's a dict but not the right format, wrap it
+            return {"messages": state["messages"]}
+        
+        # If agent returns something else, preserve existing messages
+        return {"messages": state["messages"]}
+        
+    except Exception as e:
+        print(f"❌ Error in agent {name}: {e}")
+        # Return the state unchanged if there's an error
+        return {"messages": state["messages"]}
 
 class HierarchicalCodeDevelopmentSystem:
     """Enterprise-grade code development system with Technical Lead authority and task tracking"""
@@ -76,15 +79,14 @@ class HierarchicalCodeDevelopmentSystem:
         print(f"📁 Workspace: {Path('workspace').absolute()}")
     
     def setup_graph(self):
-        """Initialize the 6-agent hierarchical development graph"""
+        """Initialize the 6-agent hierarchical development graph - CORRECTED VERSION"""
         print("🔧 Building hierarchical 6-agent development system...")
         
         try:
             # Build the graph with proper state
             workflow = StateGraph(AgentState)
             
-            # Create node functions for each agent
-            # This is the key - wrap agents in the agent_node function
+            # Create node functions for each agent with better error handling
             architect_node = functools.partial(agent_node, agent=architect, name="architect")
             writer_node = functools.partial(agent_node, agent=writer, name="writer")
             executor_node = functools.partial(agent_node, agent=executor, name="executor")
@@ -93,7 +95,7 @@ class HierarchicalCodeDevelopmentSystem:
             docs_node = functools.partial(agent_node, agent=docs, name="docs")
             finalizer_node = functools.partial(agent_node, agent=finalizer, name="finalizer")
             
-            # Add nodes with the wrapper functions
+            # Add nodes
             workflow.add_node("architect", architect_node)
             workflow.add_node("writer", writer_node)
             workflow.add_node("executor", executor_node)
@@ -105,22 +107,138 @@ class HierarchicalCodeDevelopmentSystem:
             # Set entry point
             workflow.add_edge(START, "architect")
             
-            # Only add edge from finalizer to END
-            # Command objects will handle all other routing
+            # Add conditional routing based on tool calls
+            def route_based_on_last_message(state: AgentState) -> str:
+                """Route to next agent based on the last tool call in the conversation"""
+                try:
+                    messages = state["messages"]
+                    if not messages:
+                        return "architect"
+                    
+                    # Look at the last few messages for tool calls
+                    for msg in reversed(messages[-3:]):  # Check last 3 messages
+                        if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                            for tool_call in msg.tool_calls:
+                                tool_name = tool_call.get('name', '')
+                                if tool_name.startswith('transfer_to_'):
+                                    target_agent = tool_name.replace('transfer_to_', '')
+                                    if target_agent in ["architect", "writer", "executor", "technical_lead", "task_manager", "docs", "finalizer"]:
+                                        return target_agent
+                        
+                        # Also check ToolMessages for transfer confirmations
+                        if hasattr(msg, 'name') and hasattr(msg, 'content'):
+                            if msg.name and msg.name.startswith('transfer_to_'):
+                                target_agent = msg.name.replace('transfer_to_', '')
+                                if target_agent in ["architect", "writer", "executor", "technical_lead", "task_manager", "docs", "finalizer"]:
+                                    return target_agent
+                    
+                    # Default fallback
+                    return "technical_lead"
+                    
+                except Exception as e:
+                    print(f"❌ Routing error: {e}")
+                    return "technical_lead"
+            
+            # Add conditional edges from each agent (except finalizer)
+            for agent_name in ["architect", "writer", "executor", "technical_lead", "task_manager", "docs"]:
+                workflow.add_conditional_edges(
+                    agent_name,
+                    route_based_on_last_message,
+                    {
+                        "architect": "architect",
+                        "writer": "writer", 
+                        "executor": "executor",
+                        "technical_lead": "technical_lead",
+                        "task_manager": "task_manager",
+                        "docs": "docs",
+                        "finalizer": "finalizer"
+                    }
+                )
+            
+            # End point
             workflow.add_edge("finalizer", END)
             
-            # Compile the workflow - no conditional edges needed!
+            # Compile the workflow
             self.graph = workflow.compile()
             
-            print("✅ Graph created successfully!")
-            print("📌 Using Command-based routing (no conditional edges)")
+            print("✅ Graph created successfully with conditional edge routing!")
             
         except Exception as e:
             print(f"❌ Error creating graph: {e}")
             import traceback
             traceback.print_exc()
             raise
+
+    def run_quick_development(self, request: str):
+        """Run quick development for simple requests"""
+        print(f"⚡ Quick Hierarchical Development Mode:")
+        print(f"Request: {request}")
+        print("=" * 60)
+        
+        # FIXED: Better error handling and debugging
+        try:
+            self.viewer.run(self.graph, request)
+        except Exception as e:
+            print(f"❌ Development session error: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        log_path = self.viewer.save_log(f"quick_hierarchical_{timestamp}.txt")
+        
+        self.show_results(log_path)
+    
+    def show_results(self, log_path=None):
+        """Display comprehensive development results"""
+        print("\n" + "=" * 80)
+        print("🎉 HIERARCHICAL ENTERPRISE DEVELOPMENT SESSION COMPLETED!")
+        print("=" * 80)
+        
+        # Show generated files and projects
+        print(f"\n📁 Generated Content:")
+        if log_path:
+            print(f"📋 Development Log: {log_path}")
+        
+        workspace = Path("workspace")
+        if workspace.exists():
+            # Show projects
+            projects_dir = workspace / "projects"
+            if projects_dir.exists():
+                projects = list(projects_dir.glob("*"))
+                if projects:
+                    print(f"🏗️ Projects Created: {len(projects)}")
+                    for project in projects[:3]:
+                        print(f"  📦 {project.name}/")
             
+            # Show individual files
+            files = list(workspace.rglob("*.py"))
+            if files:
+                print(f"📄 Python Files: {len(files)}")
+                for file in files[:5]:
+                    size = file.stat().st_size
+                    print(f"  🐍 {file.relative_to(workspace)} ({size} bytes)")
+        
+        print("\n💡 The 7-agent hierarchical system delivered enterprise-grade results!")
+    
+    def show_system_status(self):
+        """Show current system status and capabilities"""
+        print("📊 HIERARCHICAL ENTERPRISE DEVELOPMENT SYSTEM STATUS")
+        print("=" * 60)
+        
+        # Check workspace
+        workspace = Path("workspace")
+        if workspace.exists():
+            files = list(workspace.rglob("*"))
+            files = [f for f in files if f.is_file()]
+            print(f"📁 Workspace files: {len(files)}")
+        
+        print("\n⚠️ Key System Rules:")
+        print("  • Agents can only make ONE tool call at a time")
+        print("  • Technical Lead has authority over all agents")
+        print("  • Only Writer can create/modify code")
+        print("  • Task Manager updates only per Technical Lead directive")
+        print("  • All agents must wait for tool results before next action")
+
     def get_demo_projects(self):
         """Get comprehensive demo project examples"""
         return [
@@ -199,86 +317,31 @@ class HierarchicalCodeDevelopmentSystem:
         print(f"📋 {selected_project}")
         print("=" * 80)
         
-        # Run the development process
-        self.viewer.run(self.graph, selected_project)
+        # Run the development process with better error handling
+        try:
+            self.viewer.run(self.graph, selected_project)
+        except Exception as e:
+            print(f"❌ Development session error: {e}")
+            import traceback
+            traceback.print_exc()
         
         # Save development log
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         log_path = self.viewer.save_log(f"hierarchical_dev_{timestamp}.txt")
         
         self.show_results(log_path)
-    
-    def run_quick_development(self, request: str):
-        """Run quick development for simple requests"""
-        print(f"⚡ Quick Hierarchical Development Mode:")
-        print(f"Request: {request}")
-        print("=" * 60)
-        
-        self.viewer.run(self.graph, request)
-        
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        log_path = self.viewer.save_log(f"quick_hierarchical_{timestamp}.txt")
-        
-        self.show_results(log_path)
-    
-    def show_results(self, log_path=None):
-        """Display comprehensive development results"""
-        print("\n" + "=" * 80)
-        print("🎉 HIERARCHICAL ENTERPRISE DEVELOPMENT SESSION COMPLETED!")
-        print("=" * 80)
-        
-        # Show generated files and projects
-        print(f"\n📁 Generated Content:")
-        if log_path:
-            print(f"📋 Development Log: {log_path}")
-        
-        workspace = Path("workspace")
-        if workspace.exists():
-            # Show projects
-            projects_dir = workspace / "projects"
-            if projects_dir.exists():
-                projects = list(projects_dir.glob("*"))
-                if projects:
-                    print(f"🏗️ Projects Created: {len(projects)}")
-                    for project in projects[:3]:
-                        print(f"  📦 {project.name}/")
-            
-            # Show individual files
-            files = list(workspace.rglob("*.py"))
-            if files:
-                print(f"📄 Python Files: {len(files)}")
-                for file in files[:5]:
-                    size = file.stat().st_size
-                    print(f"  🐍 {file.relative_to(workspace)} ({size} bytes)")
-        
-        print("\n💡 The 7-agent hierarchical system delivered enterprise-grade results!")
-    
-    def show_system_status(self):
-        """Show current system status and capabilities"""
-        print("📊 HIERARCHICAL ENTERPRISE DEVELOPMENT SYSTEM STATUS")
-        print("=" * 60)
-        
-        # Check workspace
-        workspace = Path("workspace")
-        if workspace.exists():
-            files = list(workspace.rglob("*"))
-            files = [f for f in files if f.is_file()]
-            print(f"📁 Workspace files: {len(files)}")
-        
-        print("\n⚠️ Key System Rules:")
-        print("  • Agents can only make ONE tool call at a time")
-        print("  • Technical Lead has authority over all agents")
-        print("  • Only Writer can create/modify code")
-        print("  • Task Manager updates only per Technical Lead directive")
-        print("  • All agents must wait for tool results before next action")
 
 def main():
     """Main entry point for hierarchical development system"""
     print("🚀 Hierarchical Enterprise Code Development System")
     print("=" * 70)
     
-    # Create system
-    system = HierarchicalCodeDevelopmentSystem()
+    # Create system with better error handling
+    try:
+        system = HierarchicalCodeDevelopmentSystem()
+    except Exception as e:
+        print(f"❌ Failed to initialize system: {e}")
+        return
     
     # Parse command line arguments
     if len(sys.argv) > 1:

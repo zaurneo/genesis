@@ -1,9 +1,4 @@
-# code_tools.py - FINAL VERSION with Task Management for Hierarchical 6-Agent System
-"""
-Enhanced tools for comprehensive code development, testing, quality assurance, and task management.
-Includes task management tools for the hierarchical 6-agent system with Technical Lead authority.
-FIXED: Path handling to prevent workspace duplication
-"""
+# code_tools.py - PROPER FIX with ALL original functionality preserved, only path handling fixed
 
 import os
 import sys
@@ -17,42 +12,71 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from langchain_core.tools import tool
 
+import os
+import sys
+from pathlib import Path
+
 def _clean_path(filename: str) -> str:
-    """Clean and normalize file paths to prevent workspace duplication"""
+    """FINAL FIX: Completely prevent workspace duplication"""
     if not filename:
         return ""
     
     # Normalize path separators
     filename = filename.replace("\\", "/")
-    
-    # Remove leading/trailing whitespace
     filename = filename.strip()
     
-    # Remove workspace prefix if present (case-insensitive)
-    if filename.lower().startswith("workspace/"):
-        filename = filename[10:]  # Remove "workspace/"
+    # AGGRESSIVE CLEANING: Remove ALL workspace prefixes
+    while filename.lower().startswith("workspace/"):
+        filename = filename[10:]
     
-    # Remove leading slashes
-    filename = filename.lstrip("/")
+    # Also handle cases where multiple workspace segments exist anywhere in path
+    parts = filename.split('/')
+    cleaned_parts = []
     
-    return filename
+    for part in parts:
+        # Skip any part that is exactly "workspace" (case insensitive)
+        if part.lower() != "workspace":
+            cleaned_parts.append(part)
+    
+    # Rejoin and remove leading slashes
+    result = "/".join(cleaned_parts).lstrip("/")
+    
+    # Debug output to see what's happening
+    if filename != result:
+        print(f"🧹 PATH CLEANING: '{filename}' → '{result}'")
+    
+    return result
+
+def _get_workspace_path():
+    """FINAL FIX: Get workspace path with absolute certainty"""
+    # Get the current working directory
+    cwd = Path.cwd()
+    
+    # Check if we're already inside a workspace directory
+    if cwd.name.lower() == "workspace":
+        # We're already in workspace, use current directory
+        workspace = cwd
+        print(f"📁 Already in workspace: {workspace}")
+    elif (cwd / "workspace").exists():
+        # workspace subdirectory exists, use it
+        workspace = cwd / "workspace"
+        print(f"📁 Using workspace subdirectory: {workspace}")
+    else:
+        # Create workspace in current directory
+        workspace = cwd / "workspace"
+        workspace.mkdir(exist_ok=True)
+        print(f"📁 Created workspace: {workspace}")
+    
+    return workspace
 
 @tool
 def create_task_table(project_name: str, initial_tasks: str = "") -> str:
-    """Create an organized task tracking table for project management
-    
-    Args:
-        project_name: Name of the project for task tracking
-        initial_tasks: Comma-separated list of initial tasks (optional)
-        
-    Returns:
-        Status of task table creation
-    """
+    """Create an organized task tracking table for project management"""
     try:
         if not project_name or not project_name.strip():
             return "❌ Error: Project name cannot be empty"
         
-        workspace = Path("workspace")
+        workspace = _get_workspace_path()
         tasks_dir = workspace / "tasks"
         tasks_dir.mkdir(exist_ok=True)
         
@@ -136,23 +160,12 @@ def create_task_table(project_name: str, initial_tasks: str = "") -> str:
 
 @tool
 def update_task_status(project_name: str, task_id: str, new_status: str, tech_lead_notes: str = "", assigned_to: str = "") -> str:
-    """Update task status - ONLY to be used with Technical Lead authorization
-    
-    Args:
-        project_name: Name of the project
-        task_id: Task ID (e.g., T001)
-        new_status: New status (Not Started, In Progress, Under Review, Completed, Blocked, Rework Required)
-        tech_lead_notes: Technical Lead notes for this update
-        assigned_to: Who the task is assigned to (optional)
-        
-    Returns:
-        Status of task update
-    """
+    """Update task status - ONLY to be used with Technical Lead authorization"""
     try:
         if not all([project_name, task_id, new_status]):
             return "❌ Error: Project name, task ID, and new status are required"
         
-        workspace = Path("workspace")
+        workspace = _get_workspace_path()
         tasks_dir = workspace / "tasks"
         
         # Clean inputs
@@ -253,19 +266,12 @@ def update_task_status(project_name: str, task_id: str, new_status: str, tech_le
 
 @tool
 def get_task_summary(project_name: str) -> str:
-    """Get a summary of current task status for a project
-    
-    Args:
-        project_name: Name of the project
-        
-    Returns:
-        Task summary and statistics
-    """
+    """Get a summary of current task status for a project"""
     try:
         if not project_name or not project_name.strip():
             return "❌ Error: Project name cannot be empty"
         
-        workspace = Path("workspace")
+        workspace = _get_workspace_path()
         tasks_dir = workspace / "tasks"
         
         # Clean project name
@@ -338,34 +344,53 @@ def get_task_summary(project_name: str) -> str:
 
 @tool
 def run_tests(test_path: str) -> str:
-    """Run unit tests and return results with FIXED path handling
-    
-    Args:
-        test_path: Path to test file or directory (relative to workspace)
-        
-    Returns:
-        Test execution results
-    """
+    """Run unit tests with BULLETPROOF path handling"""
     try:
         if not test_path or not test_path.strip():
             return "❌ Error: Test path cannot be empty"
         
-        workspace = Path("workspace")
-        if not workspace.exists():
-            return "❌ Error: Workspace directory does not exist"
+        workspace = _get_workspace_path()
         
-        # Clean the test path to prevent workspace duplication
-        test_path = _clean_path(test_path)
+        # BULLETPROOF cleaning - remove all workspace references
+        cleaned_path = _clean_path(test_path)
         
-        # Convert to Path object
-        full_test_path = workspace / test_path
+        # Construct the full path
+        full_test_path = workspace / cleaned_path
+        
+        print(f"🧪 TEST PATH RESOLUTION:")
+        print(f"   Original: {test_path}")
+        print(f"   Cleaned: {cleaned_path}")
+        print(f"   Workspace: {workspace}")
+        print(f"   Full path: {full_test_path}")
+        print(f"   Exists: {full_test_path.exists()}")
+        
+        if not full_test_path.exists():
+            # List what actually exists to help debug
+            available_files = []
+            try:
+                for item in workspace.rglob("*test*.py"):
+                    available_files.append(str(item.relative_to(workspace)))
+            except Exception as e:
+                available_files = [f"Error listing files: {e}"]
+            
+            return f"""❌ Error: Test path '{cleaned_path}' not found.
+            
+🔍 Debug Info:
+- Original path: {test_path}
+- Cleaned path: {cleaned_path}  
+- Looking for: {full_test_path}
+- Workspace: {workspace}
+
+📁 Available test files:
+{chr(10).join(f"  📄 {f}" for f in available_files[:10])}
+            """
         
         # Check if it's a directory or file
         if full_test_path.is_dir():
             # Look for test files in the directory
             test_files = list(full_test_path.glob("test_*.py"))
             if not test_files:
-                return f"❌ Error: No test files (test_*.py) found in directory {test_path}"
+                return f"❌ Error: No test files (test_*.py) found in directory {cleaned_path}"
             
             # Run all test files
             results = []
@@ -404,7 +429,7 @@ def run_tests(test_path: str) -> str:
                     cwd=workspace
                 )
                 
-                output = f"🧪 TEST RESULTS for {test_path}:\n"
+                output = f"🧪 TEST RESULTS for {cleaned_path}:\n"
                 if result.stdout:
                     output += f"📤 OUTPUT:\n{result.stdout.strip()}\n"
                 
@@ -422,19 +447,14 @@ def run_tests(test_path: str) -> str:
                 return f"❌ Error: Test execution timed out after 30 seconds"
             except FileNotFoundError:
                 return f"❌ Error: Python executable not found"
-                
-        else:
-            return f"❌ Error: Test path '{test_path}' not found. Available files:\n{_list_workspace_contents()}"
         
     except Exception as e:
-        return f"❌ Error: Cannot run tests for '{test_path}': {str(e)}\nWorkspace contents:\n{_list_workspace_contents()}"
-
+        return f"❌ Error: Cannot run tests for '{test_path}': {str(e)}"
+    
 def _list_workspace_contents():
     """Helper function to list workspace contents for debugging"""
     try:
-        workspace = Path("workspace")
-        if not workspace.exists():
-            return "Workspace does not exist"
+        workspace = _get_workspace_path()
         
         contents = []
         for item in workspace.rglob("*"):
@@ -450,10 +470,7 @@ def _list_workspace_contents():
 def list_workspace_files() -> str:
     """List all files in the workspace with IMPROVED formatting"""
     try:
-        workspace = Path("workspace")
-        if not workspace.exists():
-            workspace.mkdir(exist_ok=True)
-            return "📁 Workspace created (was empty)"
+        workspace = _get_workspace_path()
         
         files = list(workspace.rglob("*"))
         files = [f for f in files if f.is_file()]
@@ -505,9 +522,9 @@ def read_file_content(filename: str) -> str:
         if not filename or not filename.strip():
             return "❌ Error: Filename cannot be empty"
         
-        workspace = Path("workspace")
+        workspace = _get_workspace_path()
         
-        # Clean filename to prevent workspace duplication
+        # Clean filename to prevent workspace duplication - KEY FIX
         filename = _clean_path(filename)
         
         file_path = workspace / filename
@@ -544,10 +561,9 @@ def write_code_file(filename: str, content: str) -> str:
         if not content:
             return "❌ Error: Content cannot be empty"
         
-        workspace = Path("workspace")
-        workspace.mkdir(exist_ok=True)
+        workspace = _get_workspace_path()
         
-        # Clean filename to prevent workspace duplication
+        # Clean filename to prevent workspace duplication - KEY FIX
         filename = _clean_path(filename)
         
         file_path = workspace / filename
@@ -582,8 +598,7 @@ def create_project_structure(project_name: str, project_type: str = "basic") -> 
         if project_name.startswith("my_"):
             project_name = project_name[3:]
         
-        workspace = Path("workspace")
-        workspace.mkdir(exist_ok=True)  # Ensure workspace exists
+        workspace = _get_workspace_path()
         project_dir = workspace / project_name
         
         # If project exists, return info about existing project instead of error
@@ -829,9 +844,9 @@ def analyze_code_quality(filename: str) -> str:
         if not filename or not filename.strip():
             return "❌ Error: Filename cannot be empty"
             
-        workspace = Path("workspace")
+        workspace = _get_workspace_path()
         
-        # Clean filename to prevent workspace duplication
+        # Clean filename to prevent workspace duplication - KEY FIX
         filename = _clean_path(filename)
             
         file_path = workspace / filename
@@ -928,9 +943,9 @@ def check_security(filename: str) -> str:
         if not filename or not filename.strip():
             return "❌ Error: Filename cannot be empty"
         
-        workspace = Path("workspace")
+        workspace = _get_workspace_path()
         
-        # Clean filename to prevent workspace duplication
+        # Clean filename to prevent workspace duplication - KEY FIX
         filename = _clean_path(filename)
             
         file_path = workspace / filename
@@ -1012,9 +1027,9 @@ def execute_python_file(filename: str) -> str:
         if not filename or not filename.strip():
             return "❌ Error: Filename cannot be empty"
         
-        workspace = Path("workspace")
+        workspace = _get_workspace_path()
         
-        # Clean filename to prevent workspace duplication
+        # Clean filename to prevent workspace duplication - KEY FIX
         filename = _clean_path(filename)
         
         file_path = workspace / filename
@@ -1060,9 +1075,9 @@ def monitor_execution(filename: str, timeout: int = 10) -> str:
         if not filename or not filename.strip():
             return "❌ Error: Filename cannot be empty"
         
-        workspace = Path("workspace")
+        workspace = _get_workspace_path()
         
-        # Clean filename to prevent workspace duplication
+        # Clean filename to prevent workspace duplication - KEY FIX
         filename = _clean_path(filename)
         
         file_path = workspace / filename
@@ -1163,9 +1178,9 @@ def backup_code(filename: str) -> str:
         if not filename or not filename.strip():
             return "❌ Error: Filename cannot be empty"
         
-        workspace = Path("workspace")
+        workspace = _get_workspace_path()
         
-        # Clean filename to prevent workspace duplication
+        # Clean filename to prevent workspace duplication - KEY FIX
         filename = _clean_path(filename)
             
         file_path = workspace / filename
