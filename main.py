@@ -16,10 +16,9 @@ from agents import *
 # Define multi-agent graph
 multi_agent_graph = (
     StateGraph(MessagesState)
-    .add_node(tech_lead)
-    .add_node(writer)
-    .add_node(executor)
-    .add_edge(START, "tech_lead")
+    .add_node(market_analyzer)
+    .add_node(portfolio_manager)
+    .add_edge(START, "market_analyzer")
     .compile()
 )
 
@@ -29,7 +28,7 @@ for chunk in multi_agent_graph.stream(
         "messages": [
             {
                 "role": "user",
-                "content": "I need to build a simple calculator application in Python. Please help me develop, test, and review it."
+                "content": "analyze AAPL stock and recommend a balanced portfolio allocation for moderate risk tolerance"
             }
         ]
     }

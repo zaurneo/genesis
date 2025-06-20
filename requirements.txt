@@ -1,4 +1,4 @@
-# requirements.txt - Hierarchical 6-Agent Enterprise Code Development System
+# requirements.txt - Multi-Agent Stock Analysis System
 # Core LangChain and LangGraph components for agent collaboration
 langchain-core>=0.1.0
 langchain-openai>=0.1.0
@@ -6,7 +6,7 @@ langgraph>=0.1.0
 python-dotenv>=1.0.0
 
 # Enhanced features for monitoring, quality, and task management
-psutil>=5.9.0           # Resource monitoring for code execution
+psutil>=5.9.0           # Resource monitoring for analysis execution
 setuptools>=65.0        # Package management and distribution
 wheel>=0.37.0           # Package building
 
@@ -16,10 +16,12 @@ flake8>=5.0.0           # Code linting and style checking
 black>=22.0.0           # Code formatting
 bandit>=1.7.0           # Security vulnerability scanning
 
-# Common project dependencies (for generated projects)
-requests>=2.25.0        # For web-related projects and API calls
-beautifulsoup4>=4.9.0   # For web scraping projects
-flask>=2.0.0            # For web application projects
-click>=8.0.0            # For CLI tool projects
-pandas>=1.3.0           # For data analysis projects
-numpy>=1.21.0           # For scientific computing projects
+# Stock analysis and data processing dependencies
+requests>=2.25.0        # For API calls to financial data sources
+pandas>=1.3.0           # For financial data analysis and manipulation
+numpy>=1.21.0           # For numerical computations and statistics
+matplotlib>=3.5.0       # For creating charts and visualizations
+seaborn>=0.11.0         # For advanced statistical visualizations
+yfinance>=0.1.70        # For fetching stock market data (optional)
+beautifulsoup4>=4.9.0   # For web scraping financial news
+click>=8.0.0            # For CLI tool functionality

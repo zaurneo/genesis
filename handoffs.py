@@ -29,15 +29,11 @@ def create_handoff_tool(*, agent_name: str, description: str | None = None):
 
 
 # Handoffs
-transfer_to_tech_lead = create_handoff_tool(
-    agent_name="tech_lead",
-    description="Transfer user to the technical lead for code review, guidance, and task assignment.",
+transfer_to_portfolio_manager = create_handoff_tool(
+    agent_name="portfolio_manager",
+    description="Transfer user to the portfolio management assistant.",
 )
-transfer_to_writer = create_handoff_tool(
-    agent_name="writer",
-    description="Transfer user to the code writer for implementing main application code.",
-)
-transfer_to_executor = create_handoff_tool(
-    agent_name="executor",
-    description="Transfer user to the executor for code testing and execution.",
+transfer_to_market_analyzer = create_handoff_tool(
+    agent_name="market_analyzer",
+    description="Transfer user to the market analysis assistant.",
 )

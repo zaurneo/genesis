@@ -13,21 +13,15 @@ model = ChatOpenAI(model="gpt-4o-mini", api_key=gpt_api_key)
 
 
 # Define agents
-tech_lead = create_react_agent(
+market_analyzer = create_react_agent(
     model=model,
-    tools=[review_code, assign_task, transfer_to_writer, transfer_to_executor],
-    prompt=PROMPT_TECH_LEAD,
-    name="tech_lead"
+    tools=[analyze_stock, get_market_trends, transfer_to_portfolio_manager],
+    prompt=PROMPT_A,
+    name="market_analyzer"
 )
-writer = create_react_agent(
+portfolio_manager = create_react_agent(
     model=model,
-    tools=[write_code, refactor_code, transfer_to_tech_lead, transfer_to_executor],
-    prompt=PROMPT_WRITER,
-    name="writer"
-)
-executor = create_react_agent(
-    model=model,
-    tools=[execute_code, write_test, transfer_to_tech_lead, transfer_to_writer],
-    prompt=PROMPT_EXECUTOR,
-    name="executor"
+    tools=[calculate_portfolio_risk, recommend_portfolio_allocation, transfer_to_market_analyzer],
+    prompt=PROMPT_B,
+    name="portfolio_manager"
 )
