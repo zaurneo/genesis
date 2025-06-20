@@ -6,7 +6,6 @@ from typing import Annotated, Literal
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.tools import tool
 from langchain_core.messages import BaseMessage, HumanMessage
-from langchain_experimental.utilities import PythonREPL
 from langchain_anthropic import ChatAnthropic
 from langgraph.prebuilt import create_react_agent
 from langgraph.graph import MessagesState, END, StateGraph, START
@@ -27,23 +26,6 @@ model = ChatOpenAI(model="gpt-4o-mini", api_key=gpt_api_key)
 # Define tools
 tavily_tool = TavilySearchResults(max_results=5)
 
-# Warning: This executes code locally, which can be unsafe when not sandboxed
-repl = PythonREPL()
-
-@tool
-def python_repl_tool(
-    code: Annotated[str, "The python code to execute to generate your chart."],
-):
-    """Use this to execute python code. If you want to see the output of a value,
-    you should print it out with `print(...)`. This is visible to the user."""
-    try:
-        result = repl.run(code)
-    except BaseException as e:
-        return f"Failed to execute. Error: {repr(e)}"
-    result_str = f"Successfully executed:\n```python\n{code}\n```\nStdout: {result}"
-    return (
-        result_str + "\n\nIf you have completed all tasks, respond with FINAL ANSWER."
-    )
 
 
 def get_next_node(last_message: BaseMessage, goto: str):
@@ -83,7 +65,7 @@ def research_node(
 # NOTE: THIS PERFORMS ARBITRARY CODE EXECUTION, WHICH CAN BE UNSAFE WHEN NOT SANDBOXED
 chart_agent = create_react_agent(
     model = model,
-    tools = [python_repl_tool],
+    tools = [],
     prompt=make_system_prompt(
         "You can only generate charts. You are working with a researcher colleague."
     ),
