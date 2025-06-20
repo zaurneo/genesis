@@ -1,31 +1,22 @@
-from langchain_core.prompts import ChatPromptTemplate
+"""
+System prompts and prompt-related functions for multi-agent collaboration.
+"""
 
-# OpenAI prompt
-code_gen_prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """You are a coding assistant with expertise in LCEL, LangChain expression language. \n
-Here is a full set of LCEL documentation: \n ------- \n {context} \n ------- \n Answer the user
-question based on the above provided documentation. Ensure any code you provide can be executed \n
-with all required imports and variables defined. Structure your answer with a description of the code solution. \n
-Then list the imports. And finally list the functioning code block. Here is the user question:""",
-        ),
-        ("placeholder", "{messages}"),
-    ]
-)
-
-# Anthropic prompt
-code_gen_prompt_claude = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """<instructions> You are a coding assistant with expertise in LCEL, LangChain expression language. \n
-Here is the LCEL documentation: \n ------- \n {context} \n ------- \n Answer the user question based on the \n
-above provided documentation. Ensure any code you provide can be executed with all required imports and variables \n
-defined. Structure your answer: 1) a prefix describing the code solution, 2) the imports, 3) the functioning code block. \n
-Invoke the code tool to structure the output correctly. </instructions> \n Here is the user question:""",
-        ),
-        ("placeholder", "{messages}"),
-    ]
-)
+def make_system_prompt(suffix: str) -> str:
+    """Create a system prompt for each agent with a custom suffix.
+    
+    Args:
+        suffix: Additional instructions specific to the agent's role
+        
+    Returns:
+        Complete system prompt string
+    """
+    return (
+        "You are a helpful AI assistant, collaborating with other assistants."
+        " Use the provided tools to progress towards answering the question."
+        " If you are unable to fully answer, that's OK, another assistant with different tools "
+        " will help where you left off. Execute what you can to make progress."
+        " If you or any of the other assistants have the final answer or deliverable,"
+        " prefix your response with FINAL ANSWER so the team knows to stop."
+        f"\n{suffix}"
+    )

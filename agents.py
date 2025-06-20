@@ -1,153 +1,107 @@
-from typing import List
-from typing_extensions import TypedDict
-from pydantic import BaseModel, Field
+"""
+Multi-agent collaboration agents and graph definition.
+"""
 
-# These will be imported from main.py
-code_gen_chain = None
-concatenated_content = None
+from typing import Annotated, Literal
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_core.tools import tool
+from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_experimental.utilities import PythonREPL
+from langchain_anthropic import ChatAnthropic
+from langgraph.prebuilt import create_react_agent
+from langgraph.graph import MessagesState, END, StateGraph, START
+from langgraph.types import Command
+from prompts import *
 
-class GraphState(TypedDict):
-    """
-    Represents the state of our graph.
+import os
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+load_dotenv()
+from langgraph.prebuilt import create_react_agent, InjectedState
 
-    Attributes:
-        error : Binary flag for control flow to indicate whether test error was tripped
-        messages : With user question, error messages, reasoning
-        generation : Code solution
-        iterations : Number of tries
-    """
-    error: str
-    messages: List
-    generation: str
-    iterations: int
+gpt_api_key = os.environ.get("OPENAI_API_KEY", "")
+model = ChatOpenAI(model="gpt-4o-mini", api_key=gpt_api_key)
 
-class code(BaseModel):
-    """Schema for code solutions to questions about LCEL."""
-    prefix: str = Field(description="Description of the problem and approach")
-    imports: str = Field(description="Code block import statements")
-    code: str = Field(description="Code block not including import statements")
 
-def generate(state: GraphState):
-    """
-    Generate a code solution
 
-    Args:
-        state (dict): The current graph state
+# Define tools
+tavily_tool = TavilySearchResults(max_results=5)
 
-    Returns:
-        state (dict): New key added to state, generation
-    """
-    print("---GENERATING CODE SOLUTION---")
+# Warning: This executes code locally, which can be unsafe when not sandboxed
+repl = PythonREPL()
 
-    # State
-    messages = state["messages"]
-    iterations = state["iterations"]
-    error = state["error"]
-
-    # We have been routed back to generation with an error
-    if error == "yes":
-        messages += [
-            (
-                "user",
-                "Now, try again. Invoke the code tool to structure the output with a prefix, imports, and code block:",
-            )
-        ]
-
-    # Solution
-    code_solution = code_gen_chain.invoke(
-        {"context": concatenated_content, "messages": messages}
-    )
-    messages += [
-        (
-            "assistant",
-            f"{code_solution.prefix} \n Imports: {code_solution.imports} \n Code: {code_solution.code}",
-        )
-    ]
-
-    # Increment
-    iterations = iterations + 1
-    return {"generation": code_solution, "messages": messages, "iterations": iterations}
-
-def code_check(state: GraphState):
-    """
-    Check code
-
-    Args:
-        state (dict): The current graph state
-
-    Returns:
-        state (dict): New key added to state, error
-    """
-
-    print("---CHECKING CODE---")
-
-    # State
-    messages = state["messages"]
-    code_solution = state["generation"]
-    iterations = state["iterations"]
-
-    # Get solution components
-    imports = code_solution.imports
-    code = code_solution.code
-
-    # Check imports
+@tool
+def python_repl_tool(
+    code: Annotated[str, "The python code to execute to generate your chart."],
+):
+    """Use this to execute python code. If you want to see the output of a value,
+    you should print it out with `print(...)`. This is visible to the user."""
     try:
-        exec(imports)
-    except Exception as e:
-        print("---CODE IMPORT CHECK: FAILED---")
-        error_message = [("user", f"Your solution failed the import test: {e}")]
-        messages += error_message
-        return {
-            "generation": code_solution,
-            "messages": messages,
-            "iterations": iterations,
-            "error": "yes",
-        }
-
-    # Check execution
-    try:
-        exec(imports + "\n" + code)
-    except Exception as e:
-        print("---CODE BLOCK CHECK: FAILED---")
-        error_message = [("user", f"Your solution failed the code execution test: {e}")]
-        messages += error_message
-        return {
-            "generation": code_solution,
-            "messages": messages,
-            "iterations": iterations,
-            "error": "yes",
-        }
-
-    # No errors
-    print("---NO CODE TEST FAILURES---")
-    return {
-        "generation": code_solution,
-        "messages": messages,
-        "iterations": iterations,
-        "error": "no",
-    }
-
-def reflect(state: GraphState):
-    """
-    Reflect on errors
-
-    Args:
-        state (dict): The current graph state
-
-    Returns:
-        state (dict): New key added to state, generation
-    """
-    print("---GENERATING CODE SOLUTION---")
-
-    # State
-    messages = state["messages"]
-    iterations = state["iterations"]
-    code_solution = state["generation"]
-
-    # Prompt reflection
-    # Add reflection
-    reflections = code_gen_chain.invoke(
-        {"context": concatenated_content, "messages": messages}
+        result = repl.run(code)
+    except BaseException as e:
+        return f"Failed to execute. Error: {repr(e)}"
+    result_str = f"Successfully executed:\n```python\n{code}\n```\nStdout: {result}"
+    return (
+        result_str + "\n\nIf you have completed all tasks, respond with FINAL ANSWER."
     )
-    messages += [("assistant", f"Here are reflections on the error: {reflections}")]
-    return {"generation": code_solution, "messages": messages, "iterations": iterations}
+
+
+def get_next_node(last_message: BaseMessage, goto: str):
+    if "FINAL ANSWER" in last_message.content:
+        # Any agent decided the work is done
+        return END
+    return goto
+
+# Research agent and node
+research_agent = create_react_agent(
+    model = model,
+    tools=[tavily_tool],
+    prompt=make_system_prompt(
+        "You can only do research. You are working with a chart generator colleague."
+    ),
+)
+
+def research_node(
+    state: MessagesState,
+) -> Command[Literal["chart_generator", END]]:
+    result = research_agent.invoke(state)
+    goto = get_next_node(result["messages"][-1], "chart_generator")
+    # wrap in a human message, as not all providers allow
+    # AI message at the last position of the input messages list
+    result["messages"][-1] = HumanMessage(
+        content=result["messages"][-1].content, name="researcher"
+    )
+    return Command(
+        update={
+            # share internal message history of research agent with other agents
+            "messages": result["messages"],
+        },
+        goto=goto,
+    )
+
+# Chart generator agent and node
+# NOTE: THIS PERFORMS ARBITRARY CODE EXECUTION, WHICH CAN BE UNSAFE WHEN NOT SANDBOXED
+chart_agent = create_react_agent(
+    model = model,
+    tools = [python_repl_tool],
+    prompt=make_system_prompt(
+        "You can only generate charts. You are working with a researcher colleague."
+    ),
+)
+
+def chart_node(state: MessagesState) -> Command[Literal["researcher", END]]:
+    result = chart_agent.invoke(state)
+    goto = get_next_node(result["messages"][-1], "researcher")
+    # wrap in a human message, as not all providers allow
+    # AI message at the last position of the input messages list
+    result["messages"][-1] = HumanMessage(
+        content=result["messages"][-1].content, name="chart_generator"
+    )
+    return Command(
+        update={
+            # share internal message history of chart agent with other agents
+            "messages": result["messages"],
+        },
+        goto=goto,
+    )
+

@@ -1,9 +1,11 @@
+# Core dependencies for multi-agent collaboration
+# Based on the original notebook requirements
 langchain_community
-langchain-openai
-langchain-anthropic
-langchain
-langchain_core
+langchain_anthropic  
+langchain_experimental
+matplotlib
 langgraph
-beautifulsoup4
-pydantic
-typing_extensions
+
+# Additional required dependencies
+tavily-python
+langchain_cores
