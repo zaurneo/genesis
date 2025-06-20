@@ -18,10 +18,11 @@ from agents import *
 
 """Create and compile the multi-agent graph."""
 workflow = StateGraph(MessagesState)
-workflow.add_node("researcher", research_node)
-workflow.add_node("chart_generator", chart_node)
+workflow.add_node("stock_data_fetcher", stock_data_node)
+workflow.add_node("stock_analyzer", stock_analyzer_node)
+workflow.add_node("stock_reporter", stock_reporter_node)
 
-workflow.add_edge(START, "researcher")
+workflow.add_edge(START, "stock_data_fetcher")
 graph = workflow.compile()
 
 
@@ -31,8 +32,7 @@ events = graph.stream(
         "messages": [
             (
                 "user",
-                "First, get the UK's GDP over the past 5 years, then make a line chart of it. "
-                "Once you make the chart, finish.",
+                "Get Apple stock data, analyze its performance, and create a summary report.",
             )
         ],
     },

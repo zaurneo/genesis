@@ -17,8 +17,9 @@ from tools import *
 
 
 from typing import Callable
-from langgraph.graph.message import HumanMessage
-from langgraph.graph import MessagesState, Command
+from langchain_core.messages import HumanMessage
+from langgraph.graph import MessagesState
+from langgraph.types import Command
 
 import re
 from typing import List
@@ -66,62 +67,52 @@ def make_node_with_multiple_routes(
     return node
 
 
-
-
-
-
-
-# Research agent and node
-research_agent = create_react_agent(
+# Stock Data Fetcher agent and node
+stock_data_agent = create_react_agent(
     model = model_gpt_4o_mini,
     tools=[tavily_tool],
-    prompt=make_system_prompt(
-        "You can only do research. You are working with a chart generator colleague."
+    prompt=make_system_prompt_with_handoffs(
+        "You fetch stock data and prices. You are working with stock analyzer and stock reporter colleagues.",
+        ["stock_analyzer", "stock_reporter"]
     ),
 )
 
-research_node = make_node_with_multiple_routes(
-    agent=research_agent,
-    next_nodes=["chart_generator", "data_enricher", END],
-    name="researcher"
+stock_data_node = make_node_with_multiple_routes(
+    agent=stock_data_agent,
+    next_nodes=["stock_analyzer", "stock_reporter", END],
+    name="stock_data_fetcher"
 )
 
 
-
-chart_agent = create_react_agent(
+# Stock Analyzer agent and node
+stock_analyzer_agent = create_react_agent(
     model = model_gpt_4o_mini,
     tools = [],
-    prompt=make_system_prompt(
-        "You can only generate charts. You are working with a researcher colleague."
+    prompt=make_system_prompt_with_handoffs(
+        "You analyze stock data and provide insights. You are working with stock data fetcher and stock reporter colleagues.",
+        ["stock_data_fetcher", "stock_reporter"]
     ),
 )
 
+stock_analyzer_node = make_node_with_multiple_routes(
+    agent=stock_analyzer_agent,
+    next_nodes=["stock_data_fetcher", "stock_reporter", END],
+    name="stock_analyzer"
+)
 
 
+# Stock Reporter agent and node
+stock_reporter_agent = create_react_agent(
+    model = model_gpt_4o_mini,
+    tools = [],
+    prompt=make_system_prompt_with_handoffs(
+        "You create stock analysis reports and summaries. You are working with stock data fetcher and stock analyzer colleagues.",
+        ["stock_data_fetcher", "stock_analyzer"]
+    ),
+)
 
-
-# Old original code
-# def research_node(state: MessagesState,) -> Command[Literal["chart_generator", END]]:
-#     # Call the research agent with the current conversation state
-#     result = research_agent.invoke(state)
-
-#     # Check the agent's last message to decide whether to continue or stop
-#     goto = get_next_node(result["messages"][-1], "chart_generator")
-
-#     # Some LLMs require the last message in the prompt to be from a human,
-#     # so we change the role of the last message to "HumanMessage"
-#     result["messages"][-1] = HumanMessage(
-#         content=result["messages"][-1].content,  # Keep the same text content
-#         name="researcher"  # Give it a name/role of "researcher"
-#     )
-
-#     # Return a Command that updates the shared message state and routes to the next step
-#     return Command(
-#         update={
-#             # Pass along the full conversation so other agents can use it
-#             "messages": result["messages"],
-#         },
-#         # Go to the next node (either "chart_generator" or END)
-#         goto=goto,
-#     )
-
+stock_reporter_node = make_node_with_multiple_routes(
+    agent=stock_reporter_agent,
+    next_nodes=["stock_data_fetcher", "stock_analyzer", END],
+    name="stock_reporter"
+)

@@ -1,8 +1,9 @@
 """
 System prompts and prompt-related functions for multi-agent collaboration.
 """
+from typing import List
 
-def make_system_prompt_with_handoffs(role_description: str, possible_handoffs: List[str], suffix: str) -> str:
+def make_system_prompt_with_handoffs(role_description: str, possible_handoffs: List[str]) -> str:
     """
     Create a system prompt that includes handoff instructions.
     
@@ -18,7 +19,7 @@ def make_system_prompt_with_handoffs(role_description: str, possible_handoffs: L
         "Use the provided tools to progress towards answering the question. "
         "If you are unable to fully answer, that's OK, another assistant with different tools "
         "will help where you left off. Execute what you can to make progress."
-        f"\n{suffix}"
+        f"\n{role_description}"
     )
     
     if possible_handoffs:
