@@ -1,23 +1,39 @@
-# tools.py - Stock Analysis Tools
-from langchain_core.tools import tool
+def check_claude_output(tool_output):
+    """Check for parse error or failure to call the tool"""
+    # Error with parsing
+    if tool_output["parsing_error"]:
+        # Report back output and parsing errors
+        print("Parsing error!")
+        raw_output = str(tool_output["raw"].content)
+        error = tool_output["parsing_error"]
+        raise ValueError(
+            f"Error parsing your output! Be sure to invoke the tool. Output: {raw_output}. \n Parse error: {error}"
+        )
+    # Tool was not invoked
+    elif not tool_output["parsed"]:
+        print("Failed to invoke tool!")
+        raise ValueError(
+            "You did not use the provided tool! Be sure to invoke the tool to structure the output."
+        )
+    return tool_output
 
-# Stock analysis agent tools
-@tool
-def analyze_stock(ticker: str):
-    """Analyze a specific stock ticker"""
-    return f"Successfully analyzed stock {ticker}. Current analysis shows moderate growth potential with standard volatility."
+def insert_errors(inputs):
+    """Insert errors for tool parsing in the messages"""
+    # Get errors
+    error = inputs["error"]
+    messages = inputs["messages"]
+    messages += [
+        (
+            "assistant",
+            f"Retry. You are required to fix the parsing errors: {error} \n\n You must invoke the provided tool.",
+        )
+    ]
+    return {
+        "messages": messages,
+        "context": inputs["context"],
+    }
 
-@tool
-def get_market_trends():
-    """Get current market trends and indicators"""
-    return "Market trends analysis: Overall market showing bullish sentiment with technology sector leading gains. S&P 500 up 2.1% this month."
-
-@tool
-def calculate_portfolio_risk(stocks: str):
-    """Calculate portfolio risk for given stocks"""
-    return f"Portfolio risk analysis for {stocks}: Moderate risk level detected. Diversification score: 7/10. Recommended for balanced investors."
-
-@tool
-def recommend_portfolio_allocation(risk_tolerance: str):
-    """Recommend portfolio allocation based on risk tolerance"""
-    return f"Portfolio allocation recommendation for {risk_tolerance} risk tolerance: 60% equities, 30% bonds, 10% alternatives. Expected annual return: 8-12%."
+def parse_output(solution):
+    """When we add 'include_raw=True' to structured output,
+    it will return a dict w 'raw', 'parsed', 'parsing_error'."""
+    return solution["parsed"]
