@@ -13,15 +13,21 @@ model = ChatOpenAI(model="gpt-4o-mini", api_key=gpt_api_key)
 
 
 # Define agents
-flight_assistant = create_react_agent(
+tech_lead = create_react_agent(
     model=model,
-    tools=[book_flight, transfer_to_hotel_assistant],
-    prompt=PROMPT_A,
-    name="flight_assistant"
+    tools=[review_code, assign_task, transfer_to_writer, transfer_to_executor],
+    prompt=PROMPT_TECH_LEAD,
+    name="tech_lead"
 )
-hotel_assistant = create_react_agent(
+writer = create_react_agent(
     model=model,
-    tools=[book_hotel, transfer_to_flight_assistant],
-    prompt=PROMPT_B,
-    name="hotel_assistant"
+    tools=[write_code, refactor_code, transfer_to_tech_lead, transfer_to_executor],
+    prompt=PROMPT_WRITER,
+    name="writer"
+)
+executor = create_react_agent(
+    model=model,
+    tools=[execute_code, write_test, transfer_to_tech_lead, transfer_to_writer],
+    prompt=PROMPT_EXECUTOR,
+    name="executor"
 )

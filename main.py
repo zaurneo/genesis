@@ -16,9 +16,10 @@ from agents import *
 # Define multi-agent graph
 multi_agent_graph = (
     StateGraph(MessagesState)
-    .add_node(flight_assistant)
-    .add_node(hotel_assistant)
-    .add_edge(START, "flight_assistant")
+    .add_node(tech_lead)
+    .add_node(writer)
+    .add_node(executor)
+    .add_edge(START, "tech_lead")
     .compile()
 )
 
@@ -28,7 +29,7 @@ for chunk in multi_agent_graph.stream(
         "messages": [
             {
                 "role": "user",
-                "content": "book a flight from BOS to JFK and a stay at McKittrick Hotel"
+                "content": "I need to build a simple calculator application in Python. Please help me develop, test, and review it."
             }
         ]
     }

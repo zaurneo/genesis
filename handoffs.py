@@ -1,5 +1,3 @@
-
-
 from typing import Annotated
 from langchain_core.tools import tool, InjectedToolCallId
 from langgraph.prebuilt import InjectedState
@@ -31,45 +29,15 @@ def create_handoff_tool(*, agent_name: str, description: str | None = None):
 
 
 # Handoffs
-transfer_to_hotel_assistant = create_handoff_tool(
-    agent_name="hotel_assistant",
-    description="Transfer user to the hotel-booking assistant.",
+transfer_to_tech_lead = create_handoff_tool(
+    agent_name="tech_lead",
+    description="Transfer user to the technical lead for code review, guidance, and task assignment.",
 )
-transfer_to_flight_assistant = create_handoff_tool(
-    agent_name="flight_assistant",
-    description="Transfer user to the flight-booking assistant.",
+transfer_to_writer = create_handoff_tool(
+    agent_name="writer",
+    description="Transfer user to the code writer for implementing main application code.",
 )
-
-# def create_handoff_tool(*, agent_name: str, description: str | None = None):
-#     """Create a handoff tool following official LangGraph patterns"""
-#     name = f"transfer_to_{agent_name}"
-#     description = description or f"Transfer to {agent_name}"
-    
-#     @tool(name, description=description)
-#     def handoff_tool(
-#         state: Annotated[MessagesState, InjectedState],
-#         tool_call_id: Annotated[str, InjectedToolCallId],
-#         reason: str = ""  # Keep your useful reason parameter
-#     ) -> Command:
-#         """Transfer control to the specified agent using official Command pattern"""
-        
-#         # Create tool message as per official pattern
-#         content = f"Successfully transferred to {agent_name}"
-#         if reason:
-#             content += f". Reason: {reason}"
-            
-#         tool_message = {
-#             "role": "tool",
-#             "content": content,
-#             "name": name,
-#             "tool_call_id": tool_call_id,
-#         }
-        
-#         # Return Command object for proper routing and state management
-#         return Command(
-#             goto=agent_name,
-#             update={"messages": state["messages"] + [tool_message]},
-#             graph=Command.PARENT,  # Important for multi-agent systems
-#         )
-    
-#     return handoff_tool
+transfer_to_executor = create_handoff_tool(
+    agent_name="executor",
+    description="Transfer user to the executor for code testing and execution.",
+)
