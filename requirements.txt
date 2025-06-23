@@ -3,9 +3,13 @@
 langchain_community
 langchain_anthropic  
 langchain_experimental
+langchain_core
+langchain_openai
 matplotlib
 langgraph
 
 # Additional required dependencies
 tavily-python
-langchain_cores
+python-dotenv
+
+# Memory handling uses standard library uuid and langchain_core.chat_history
