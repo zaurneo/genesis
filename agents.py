@@ -5,6 +5,16 @@ from models import model_gpt_4o_mini
 from tools import tavily_tool
 from prompts import make_system_prompt_with_handoffs
 
+
+# 🔹 Difference between Python variable name and the `name` argument:
+# - The Python variable name (e.g., `stock_data_node`) is just for referencing the node in your code.
+#   It has no effect on the execution, memory, or message labeling.
+# 
+# - The `name` argument (e.g., `name="stock_data_fetcher"`) is used to label the agent's messages
+#   within the chat history. It identifies **who** said what, and is essential for memory,
+#   logging, and handoffs between agents.
+#   Best practice: keep both names aligned for clarity and debugging.
+
 # Stock Data Fetcher agent and node
 stock_data_agent = create_react_agent(
     model = model_gpt_4o_mini,
