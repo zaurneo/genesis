@@ -60,6 +60,29 @@ def get_next_node(last_message: BaseMessage, candidates: List[str]) -> str:
     return candidates[0]
 
 
+"""
+SIMPLE VERSION SHOWN BELOW
+llm = ChatOpenAI(model="gpt-4o")
+
+search_agent = create_react_agent(llm, tools=[tavily_tool])
+
+
+def search_node(state: State) -> Command[Literal["supervisor"]]:
+    result = search_agent.invoke(state)
+    return Command(
+        update={
+            "messages": [
+                HumanMessage(content=result["messages"][-1].content, name="search")
+            ]
+        },
+        # We want our workers to ALWAYS "report back" to the supervisor when done
+        goto="supervisor",
+    )
+"""
+
+
+
+
 def make_node_with_multiple_routes_and_memory(
     agent: Callable[[MessagesState], dict],
     next_nodes: List[str],    # e.g., ["chart_generator", "data_enricher"]
