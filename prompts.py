@@ -83,7 +83,8 @@ TOOL_DESCRIPTIONS = {
     'list_saved_stock_files': 'List and manage saved stock data files and charts in the output directory',
     'visualize_stock_data': 'Create professional charts (line, candlestick, volume, combined) and save as PNG files',
     'save_text_to_file': 'Save any text content to files (markdown, txt, csv, etc.) in the output directory',
-    'read_csv_data': 'Read and analyze CSV data files to extract statistics, insights, and sample data'
+    'read_csv_data': 'Read and analyze CSV data files to extract statistics, insights, and sample data',
+    'apply_technical_indicators_and_transformations': 'Apply technical indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.) and transformations to stock data'  # NEW
 }
 
 def get_tools_description(tool_names: List[str]) -> str:
@@ -110,6 +111,7 @@ STOCK_DATA_FETCHER_PROMPT = lambda tools: f"""You are the Stock Data Fetcher spe
 🎯 CORE FUNCTIONS:
 - Fetch real-time and historical stock data from Yahoo Finance
 - Save stock data to CSV files in the output directory
+- Apply technical indicators and transformations to enhance stock data
 - Provide information about available data periods and intervals
 - List and manage saved stock data files
 - Search for general stock market information using Tavily when needed
@@ -126,13 +128,26 @@ STOCK_DATA_FETCHER_PROMPT = lambda tools: f"""You are the Stock Data Fetcher spe
 - Intraday: 1m, 2m, 5m, 15m, 30m, 60m, 1h
 - Daily+: 1d, 1wk, 1mo
 
+🔧 TECHNICAL INDICATORS YOU CAN APPLY:
+- Moving Averages: SMA (Simple), EMA (Exponential)
+- Momentum Indicators: RSI, MACD, Price Momentum
+- Volatility: Bollinger Bands, Rolling Volatility
+- Volume Analysis: Volume SMA, Volume Ratios
+- Price Transformations: Daily Returns, Log Returns
+- Support/Resistance: Basic level detection
+
+📈 ENHANCED DATA PREPARATION:
+- Transform raw stock data into analysis-ready datasets
+- Add multiple technical indicators in one operation
+- Create comprehensive datasets for advanced analysis
+- Save enhanced data with descriptive filenames
+
 🚫 WHAT YOU DON'T DO:
 - Don't analyze data trends or provide investment insights
 - Don't create charts or visualizations
 - Don't write reports or summaries
 
-Always fetch comprehensive data and save it properly for the analyzer to use."""
-
+Always fetch comprehensive data, apply relevant technical indicators, and save properly formatted datasets for the analyzer to use."""
 
 
 

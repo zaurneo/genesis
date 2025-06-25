@@ -8,8 +8,10 @@ from tools import (
     visualize_stock_data,
     list_saved_stock_files,
     save_text_to_file,
-    read_csv_data
+    read_csv_data,
+    apply_technical_indicators_and_transformations
 )
+
 from prompts import (
     make_system_prompt_with_handoffs,
     STOCK_DATA_FETCHER_PROMPT,
@@ -32,7 +34,8 @@ stock_data_fetcher_tools = [
     tavily_tool, 
     fetch_yahoo_finance_data, 
     get_available_stock_periods_and_intervals,
-    list_saved_stock_files
+    list_saved_stock_files,
+    apply_technical_indicators_and_transformations  
 ]
 
 stock_data_agent = create_react_agent(
