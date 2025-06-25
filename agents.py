@@ -9,7 +9,10 @@ from tools import (
     list_saved_stock_files,
     save_text_to_file,
     read_csv_data,
-    apply_technical_indicators_and_transformations
+    apply_technical_indicators_and_transformations,
+    train_xgboost_price_predictor,  # NEW: Add these imports
+    train_random_forest_price_predictor,  # NEW
+    backtest_model_strategy  # NEW
 )
 
 from prompts import (
@@ -43,8 +46,8 @@ stock_data_agent = create_react_agent(
     tools=stock_data_fetcher_tools,
     name = "stock_data_agent",
     prompt=make_system_prompt_with_handoffs(
-        STOCK_DATA_FETCHER_PROMPT([tool.name for tool in stock_data_fetcher_tools]),
-        ["stock_analyzer", "stock_reporter"]
+        STOCK_DATA_FETCHER_PROMPT([tool.name for tool in stock_data_fetcher_tools])
+        # ["stock_analyzer", "stock_reporter"]
     ),
 )
 
@@ -53,7 +56,10 @@ stock_data_agent = create_react_agent(
 # Stock Analyzer agent and node
 stock_analyzer_tools = [
     visualize_stock_data,
-    list_saved_stock_files
+    list_saved_stock_files,
+    train_xgboost_price_predictor,  # NEW: Add ML modeling tools
+    train_random_forest_price_predictor,  # NEW
+    backtest_model_strategy  # NEW: Add backtesting tool
 ]
 
 stock_analyzer_agent = create_react_agent(
@@ -61,8 +67,8 @@ stock_analyzer_agent = create_react_agent(
     tools = stock_analyzer_tools,
     name = "stock_analyzer_agent",
     prompt=make_system_prompt_with_handoffs(
-        STOCK_ANALYZER_PROMPT([tool.name for tool in stock_analyzer_tools]),
-        ["stock_data_fetcher", "stock_reporter"]
+        STOCK_ANALYZER_PROMPT([tool.name for tool in stock_analyzer_tools])
+        # ["stock_data_fetcher", "stock_reporter"]
     ),
 )
 
@@ -80,7 +86,7 @@ stock_reporter_agent = create_react_agent(
     tools = stock_reporter_tools,
     name = "stock_reporter_agent",
     prompt=make_system_prompt_with_handoffs(
-        STOCK_REPORTER_PROMPT([tool.name for tool in stock_reporter_tools]),
-        ["stock_data_fetcher", "stock_analyzer"]
+        STOCK_REPORTER_PROMPT([tool.name for tool in stock_reporter_tools])
+        # ["stock_data_fetcher", "stock_analyzer"]
     ),
 )

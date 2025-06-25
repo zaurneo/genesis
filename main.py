@@ -37,7 +37,7 @@ for chunk in graph.stream({
     "messages": [
         {
             "role": "user", 
-            "content": "Processing Query: 'Get Apple stock data, analyze its performance, and create a summary report.'"
+            "content": "Processing Query: 'Get Apple stock data, create technical indicators, tain random forest model, backtest its results, analyze its performance, and create a summary report.'"
         }         
     ]
     }, config=config):

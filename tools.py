@@ -799,3 +799,952 @@ def apply_technical_indicators_and_transformations(
         
     except Exception as e:
         return f"apply_technical_indicators_and_transformations: Error processing {symbol}: {str(e)}"
+
+@tool
+def backtest_model_strategy(
+    symbol: str,
+    model_file: str,
+    data_file: Optional[str] = None,
+    initial_capital: float = 10000.0,
+    strategy_type: Literal["threshold", "directional", "percentile"] = "directional",
+    threshold: float = 0.02,
+    transaction_cost: float = 0.001,
+    save_results: bool = True
+) -> str:
+    """
+    Backtest a trained model's predictions using various trading strategies.
+    
+    Args:
+        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
+        model_file: Trained model file (.pkl) to use for predictions
+        data_file: Enhanced CSV file with technical indicators (if None, uses most recent)
+        initial_capital: Starting capital for backtesting ($10,000 default)
+        strategy_type: Trading strategy type:
+                      - "threshold": Buy if predicted return > threshold, sell if < -threshold
+                      - "directional": Buy if predicted price > current, sell if < current
+                      - "percentile": Buy/sell based on prediction percentiles
+        threshold: Threshold for buy/sell signals (used in threshold strategy)
+        transaction_cost: Transaction cost as percentage (0.001 = 0.1%)
+        save_results: Whether to save detailed backtest results
+        
+    Returns:
+        String with comprehensive backtesting results and performance metrics
+    """
+    try:
+        symbol = symbol.upper()
+        
+        # Load trained model
+        if not model_file.endswith('.pkl'):
+            model_file += '.pkl'
+        model_filepath = os.path.join(OUTPUT_DIR, model_file)
+        
+        if not os.path.exists(model_filepath):
+            available_models = [f for f in os.listdir(OUTPUT_DIR) if f.endswith('_model.pkl')]
+            return f"backtest_model_strategy: Model file '{model_file}' not found. Available models: {', '.join(available_models)}"
+        
+        with open(model_filepath, 'rb') as f:
+            model_data = pickle.load(f)
+        
+        model = model_data['model']
+        scaler = model_data['scaler']
+        feature_cols = model_data['feature_cols']
+        target_days = model_data['target_days']
+        
+        # Load data
+        if data_file:
+            if not data_file.endswith('.csv'):
+                data_file += '.csv'
+            filepath = os.path.join(OUTPUT_DIR, data_file)
+            if not os.path.exists(filepath):
+                return f"backtest_model_strategy: Data file '{data_file}' not found."
+            data = pd.read_csv(filepath, index_col=0, parse_dates=True)
+            data_source = f"file: {data_file}"
+        else:
+            # Find most recent enhanced data file
+            enhanced_files = [f for f in os.listdir(OUTPUT_DIR) if 
+                            f.startswith(f"apply_technical_indicators_and_transformations_{symbol}_") and f.endswith('.csv')]
+            if enhanced_files:
+                latest_file = max(enhanced_files, key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
+                filepath = os.path.join(OUTPUT_DIR, latest_file)
+                data = pd.read_csv(filepath, index_col=0, parse_dates=True)
+                data_source = f"enhanced file: {latest_file}"
+            else:
+                return f"backtest_model_strategy: No enhanced data files found for {symbol}."
+        
+        # Ensure we have the required features
+        missing_features = set(feature_cols) - set(data.columns)
+        if missing_features:
+            return f"backtest_model_strategy: Missing required features: {', '.join(missing_features)}"
+        
+        # Prepare data for backtesting
+        backtest_data = data[feature_cols + ['Close']].dropna().copy()
+        
+        if len(backtest_data) < 50:
+            return f"backtest_model_strategy: Insufficient data for backtesting. Only {len(backtest_data)} records available."
+        
+        # Make predictions
+        X = backtest_data[feature_cols]
+        X_scaled = scaler.transform(X)
+        predictions = model.predict(X_scaled)
+        
+        # Add predictions to data
+        backtest_data['Predicted_Price'] = predictions
+        backtest_data['Current_Price'] = backtest_data['Close']
+        backtest_data['Predicted_Return'] = (backtest_data['Predicted_Price'] / backtest_data['Current_Price'] - 1) * 100
+        
+        # Generate trading signals based on strategy
+        if strategy_type == "threshold":
+            backtest_data['Signal'] = 0
+            backtest_data.loc[backtest_data['Predicted_Return'] > threshold * 100, 'Signal'] = 1  # Buy
+            backtest_data.loc[backtest_data['Predicted_Return'] < -threshold * 100, 'Signal'] = -1  # Sell
+        
+        elif strategy_type == "directional":
+            backtest_data['Signal'] = 0
+            backtest_data.loc[backtest_data['Predicted_Price'] > backtest_data['Current_Price'], 'Signal'] = 1  # Buy
+            backtest_data.loc[backtest_data['Predicted_Price'] < backtest_data['Current_Price'], 'Signal'] = -1  # Sell
+        
+        elif strategy_type == "percentile":
+            pred_return_75 = backtest_data['Predicted_Return'].quantile(0.75)
+            pred_return_25 = backtest_data['Predicted_Return'].quantile(0.25)
+            backtest_data['Signal'] = 0
+            backtest_data.loc[backtest_data['Predicted_Return'] > pred_return_75, 'Signal'] = 1  # Buy top 25%
+            backtest_data.loc[backtest_data['Predicted_Return'] < pred_return_25, 'Signal'] = -1  # Sell bottom 25%
+        
+        # Simulate trading
+        portfolio_value = initial_capital
+        cash = initial_capital
+        shares = 0
+        position = 0  # 0: no position, 1: long, -1: short
+        
+        portfolio_history = []
+        trades = []
+        
+        for i, (date, row) in enumerate(backtest_data.iterrows()):
+            current_price = row['Current_Price']
+            signal = row['Signal']
+            
+            # Execute trades based on signals
+            if signal == 1 and position <= 0:  # Buy signal
+                if position == -1:  # Cover short position first
+                    cash += shares * current_price * (1 - transaction_cost)
+                    trades.append({
+                        'date': date,
+                        'action': 'cover_short',
+                        'price': current_price,
+                        'shares': shares,
+                        'value': shares * current_price
+                    })
+                    shares = 0
+                
+                # Open long position
+                shares_to_buy = cash // (current_price * (1 + transaction_cost))
+                if shares_to_buy > 0:
+                    cost = shares_to_buy * current_price * (1 + transaction_cost)
+                    cash -= cost
+                    shares = shares_to_buy
+                    position = 1
+                    trades.append({
+                        'date': date,
+                        'action': 'buy',
+                        'price': current_price,
+                        'shares': shares_to_buy,
+                        'value': cost
+                    })
+            
+            elif signal == -1 and position >= 0:  # Sell signal
+                if position == 1:  # Sell long position first
+                    cash += shares * current_price * (1 - transaction_cost)
+                    trades.append({
+                        'date': date,
+                        'action': 'sell',
+                        'price': current_price,
+                        'shares': shares,
+                        'value': shares * current_price
+                    })
+                    shares = 0
+                
+                # Open short position (simplified - assume we can short)
+                shares_to_short = cash // (current_price * (1 + transaction_cost))
+                if shares_to_short > 0:
+                    cash += shares_to_short * current_price * (1 - transaction_cost)
+                    shares = shares_to_short
+                    position = -1
+                    trades.append({
+                        'date': date,
+                        'action': 'short',
+                        'price': current_price,
+                        'shares': shares_to_short,
+                        'value': shares_to_short * current_price
+                    })
+            
+            # Calculate portfolio value
+            if position == 1:  # Long position
+                portfolio_value = cash + shares * current_price
+            elif position == -1:  # Short position
+                portfolio_value = cash - shares * current_price
+            else:  # No position
+                portfolio_value = cash
+            
+            portfolio_history.append({
+                'date': date,
+                'portfolio_value': portfolio_value,
+                'cash': cash,
+                'shares': shares,
+                'position': position,
+                'price': current_price,
+                'signal': signal
+            })
+        
+        # Convert to DataFrame for analysis
+        portfolio_df = pd.DataFrame(portfolio_history)
+        portfolio_df.set_index('date', inplace=True)
+        
+        # Calculate performance metrics
+        portfolio_df['returns'] = portfolio_df['portfolio_value'].pct_change()
+        portfolio_df['cumulative_returns'] = (1 + portfolio_df['returns']).cumprod() - 1
+        
+        # Buy and hold benchmark
+        initial_shares_bh = initial_capital / backtest_data['Current_Price'].iloc[0]
+        portfolio_df['buy_hold_value'] = initial_shares_bh * portfolio_df['price']
+        portfolio_df['buy_hold_returns'] = portfolio_df['buy_hold_value'].pct_change()
+        portfolio_df['buy_hold_cumulative'] = (1 + portfolio_df['buy_hold_returns']).cumprod() - 1
+        
+        # Performance metrics
+        total_return = (portfolio_df['portfolio_value'].iloc[-1] / initial_capital - 1) * 100
+        buy_hold_return = (portfolio_df['buy_hold_value'].iloc[-1] / initial_capital - 1) * 100
+        
+        # Calculate additional metrics
+        annual_return = ((portfolio_df['portfolio_value'].iloc[-1] / initial_capital) ** (252 / len(portfolio_df)) - 1) * 100
+        volatility = portfolio_df['returns'].std() * np.sqrt(252) * 100
+        sharpe_ratio = (annual_return - 2) / volatility if volatility > 0 else 0  # Assuming 2% risk-free rate
+        
+        # Maximum drawdown
+        rolling_max = portfolio_df['portfolio_value'].expanding().max()
+        drawdown = (portfolio_df['portfolio_value'] - rolling_max) / rolling_max
+        max_drawdown = drawdown.min() * 100
+        
+        # Win rate
+        profitable_trades = len([t for t in trades if 
+                               (t['action'] == 'sell' and len([t2 for t2 in trades if t2['action'] == 'buy' and t2['date'] < t['date']]) > 0) or
+                               (t['action'] == 'cover_short' and len([t2 for t2 in trades if t2['action'] == 'short' and t2['date'] < t['date']]) > 0)])
+        total_trades = len([t for t in trades if t['action'] in ['sell', 'cover_short']])
+        win_rate = (profitable_trades / total_trades * 100) if total_trades > 0 else 0
+        
+        # Save results if requested
+        results_filename = None
+        if save_results:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            results = {
+                'symbol': symbol,
+                'model_file': model_file,
+                'data_source': data_source,
+                'strategy_type': strategy_type,
+                'backtest_period': {
+                    'start': str(portfolio_df.index[0]),
+                    'end': str(portfolio_df.index[-1]),
+                    'days': len(portfolio_df)
+                },
+                'performance': {
+                    'total_return_pct': float(total_return),
+                    'annualized_return_pct': float(annual_return),
+                    'volatility_pct': float(volatility),
+                    'sharpe_ratio': float(sharpe_ratio),
+                    'max_drawdown_pct': float(max_drawdown),
+                    'win_rate_pct': float(win_rate),
+                    'total_trades': int(total_trades),
+                    'final_portfolio_value': float(portfolio_df['portfolio_value'].iloc[-1])
+                },
+                'benchmark': {
+                    'buy_hold_return_pct': float(buy_hold_return),
+                    'excess_return_pct': float(total_return - buy_hold_return)
+                },
+                'trades': trades
+            }
+            
+            results_filename = f"backtest_model_strategy_{symbol}_results_{timestamp}.json"
+            results_filepath = os.path.join(OUTPUT_DIR, results_filename)
+            with open(results_filepath, 'w') as f:
+                json.dump(results, f, indent=2, default=str)
+            
+            # Save portfolio history
+            portfolio_filename = f"backtest_model_strategy_{symbol}_portfolio_{timestamp}.csv"
+            portfolio_filepath = os.path.join(OUTPUT_DIR, portfolio_filename)
+            portfolio_df.to_csv(portfolio_filepath)
+        
+        # Create summary
+        summary = f"""backtest_model_strategy: Completed backtesting for {symbol} using {strategy_type} strategy:
+
+🎯 BACKTEST CONFIGURATION:
+- Symbol: {symbol}
+- Model: {model_file}
+- Data Source: {data_source}
+- Strategy: {strategy_type.title()}
+- Initial Capital: ${initial_capital:,.0f}
+- Transaction Cost: {transaction_cost:.1%}
+- Period: {portfolio_df.index[0].strftime('%Y-%m-%d')} to {portfolio_df.index[-1].strftime('%Y-%m-%d')} ({len(portfolio_df)} days)
+
+📊 STRATEGY PERFORMANCE:
+- Final Portfolio Value: ${portfolio_df['portfolio_value'].iloc[-1]:,.2f}
+- Total Return: {total_return:.2f}%
+- Annualized Return: {annual_return:.2f}%
+- Volatility: {volatility:.2f}%
+- Sharpe Ratio: {sharpe_ratio:.2f}
+- Maximum Drawdown: {max_drawdown:.2f}%
+- Win Rate: {win_rate:.1f}%
+- Total Trades: {total_trades}
+
+📈 BENCHMARK COMPARISON:
+- Buy & Hold Return: {buy_hold_return:.2f}%
+- Strategy Excess Return: {total_return - buy_hold_return:.2f}%
+- Alpha: {'Positive' if total_return > buy_hold_return else 'Negative'}
+
+💡 PERFORMANCE ASSESSMENT:
+- Risk-Adjusted Performance: {'Excellent' if sharpe_ratio > 1.5 else 'Good' if sharpe_ratio > 1.0 else 'Fair' if sharpe_ratio > 0.5 else 'Poor'}
+- Strategy Effectiveness: {'Outperforming' if total_return > buy_hold_return else 'Underperforming'} vs Buy & Hold
+- Maximum Risk: {max_drawdown:.1f}% portfolio decline from peak
+- Trading Activity: {'High' if total_trades > len(portfolio_df) * 0.1 else 'Moderate' if total_trades > len(portfolio_df) * 0.05 else 'Low'} frequency
+
+📁 FILES SAVED:
+- Detailed Results: {results_filename if results_filename else 'Not saved'}
+- Portfolio History: {portfolio_filename if save_results else 'Not saved'}
+
+⚠️ IMPORTANT NOTES:
+- Results are based on historical data and may not reflect future performance
+- Transaction costs and slippage are simplified
+- Short selling assumptions may not reflect real market conditions
+- This is for analysis purposes only, not investment advice
+"""
+        
+        return summary
+        
+    except Exception as e:
+        return f"backtest_model_strategy: Error running backtest for {symbol}: {str(e)}"
+    
+
+# Add these imports to the top of tools.py
+import pickle
+import json
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split, TimeSeriesSplit
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.preprocessing import StandardScaler
+import xgboost as xgb
+import warnings
+warnings.filterwarnings('ignore')
+
+@tool
+def train_xgboost_price_predictor(
+    symbol: str,
+    source_file: Optional[str] = None,
+    target_days: int = 1,
+    test_size: float = 0.2,
+    n_estimators: int = 100,
+    max_depth: int = 6,
+    learning_rate: float = 0.1,
+    save_model: bool = True
+) -> str:
+    """
+    Train an XGBoost model to predict stock prices using technical indicators.
+    
+    Args:
+        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
+        source_file: Enhanced CSV file with technical indicators (if None, uses most recent)
+        target_days: Number of days ahead to predict (1 = next day, 5 = next week)
+        test_size: Proportion of data for testing (0.2 = 20%)
+        n_estimators: Number of boosting rounds
+        max_depth: Maximum tree depth
+        learning_rate: Learning rate for boosting
+        save_model: Whether to save the trained model
+        
+    Returns:
+        String with model performance metrics and file locations
+    """
+    try:
+        symbol = symbol.upper()
+        
+        # Load enhanced data with technical indicators
+        if source_file:
+            if not source_file.endswith('.csv'):
+                source_file += '.csv'
+            filepath = os.path.join(OUTPUT_DIR, source_file)
+            if not os.path.exists(filepath):
+                return f"train_xgboost_price_predictor: Source file '{source_file}' not found."
+            data = pd.read_csv(filepath, index_col=0, parse_dates=True)
+            data_source = f"file: {source_file}"
+        else:
+            # Find most recent enhanced data file
+            enhanced_files = [f for f in os.listdir(OUTPUT_DIR) if 
+                            f.startswith(f"apply_technical_indicators_and_transformations_{symbol}_") and f.endswith('.csv')]
+            if enhanced_files:
+                latest_file = max(enhanced_files, key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
+                filepath = os.path.join(OUTPUT_DIR, latest_file)
+                data = pd.read_csv(filepath, index_col=0, parse_dates=True)
+                data_source = f"enhanced file: {latest_file}"
+            else:
+                return f"train_xgboost_price_predictor: No enhanced data files found for {symbol}. Please run technical indicators first."
+        
+        if data.empty or len(data) < 50:
+            return f"train_xgboost_price_predictor: Insufficient data for {symbol}. Need at least 50 records."
+        
+        # Prepare features and target
+        # Target: future price (shifted by target_days)
+        data['Target'] = data['Close'].shift(-target_days)
+        
+        # Select feature columns (exclude basic OHLCV and target)
+        exclude_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'Dividends', 'Stock Splits', 'Target']
+        feature_cols = [col for col in data.columns if col not in exclude_cols and not data[col].isnull().all()]
+        
+        if len(feature_cols) < 3:
+            return f"train_xgboost_price_predictor: Insufficient technical indicators. Found only {len(feature_cols)} features. Need at least 3."
+        
+        # Remove rows with NaN values
+        model_data = data[feature_cols + ['Target']].dropna()
+        
+        if len(model_data) < 30:
+            return f"train_xgboost_price_predictor: Insufficient clean data after removing NaN values. Only {len(model_data)} records available."
+        
+        X = model_data[feature_cols]
+        y = model_data['Target']
+        
+        # Time series split for more realistic evaluation
+        tscv = TimeSeriesSplit(n_splits=3)
+        cv_scores = []
+        
+        # Also do a simple train-test split
+        split_idx = int(len(X) * (1 - test_size))
+        X_train, X_test = X[:split_idx], X[split_idx:]
+        y_train, y_test = y[:split_idx], y[split_idx:]
+        
+        # Scale features
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        
+        # Train XGBoost model
+        model = xgb.XGBRegressor(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            learning_rate=learning_rate,
+            random_state=42,
+            n_jobs=-1
+        )
+        
+        model.fit(X_train_scaled, y_train)
+        
+        # Make predictions
+        train_pred = model.predict(X_train_scaled)
+        test_pred = model.predict(X_test_scaled)
+        
+        # Calculate metrics
+        train_rmse = np.sqrt(mean_squared_error(y_train, train_pred))
+        test_rmse = np.sqrt(mean_squared_error(y_test, test_pred))
+        train_mae = mean_absolute_error(y_train, train_pred)
+        test_mae = mean_absolute_error(y_test, test_pred)
+        train_r2 = r2_score(y_train, train_pred)
+        test_r2 = r2_score(y_test, test_pred)
+        
+        # Cross-validation scores
+        for train_idx, val_idx in tscv.split(X):
+            X_cv_train, X_cv_val = X.iloc[train_idx], X.iloc[val_idx]
+            y_cv_train, y_cv_val = y.iloc[train_idx], y.iloc[val_idx]
+            
+            X_cv_train_scaled = scaler.fit_transform(X_cv_train)
+            X_cv_val_scaled = scaler.transform(X_cv_val)
+            
+            cv_model = xgb.XGBRegressor(n_estimators=n_estimators, max_depth=max_depth, 
+                                     learning_rate=learning_rate, random_state=42)
+            cv_model.fit(X_cv_train_scaled, y_cv_train)
+            cv_pred = cv_model.predict(X_cv_val_scaled)
+            cv_scores.append(r2_score(y_cv_val, cv_pred))
+        
+        # Feature importance
+        feature_importance = pd.DataFrame({
+            'feature': feature_cols,
+            'importance': model.feature_importances_
+        }).sort_values('importance', ascending=False)
+        
+        # Save model and results if requested
+        model_filename = None
+        results_filename = None
+        if save_model:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Save model
+            model_filename = f"train_xgboost_price_predictor_{symbol}_model_{timestamp}.pkl"
+            model_filepath = os.path.join(OUTPUT_DIR, model_filename)
+            with open(model_filepath, 'wb') as f:
+                pickle.dump({
+                    'model': model,
+                    'scaler': scaler,
+                    'feature_cols': feature_cols,
+                    'target_days': target_days,
+                    'symbol': symbol
+                }, f)
+            
+            # Save results
+            results = {
+                'symbol': symbol,
+                'target_days': target_days,
+                'data_source': data_source,
+                'training_samples': len(X_train),
+                'test_samples': len(X_test),
+                'features_used': feature_cols,
+                'model_params': {
+                    'n_estimators': n_estimators,
+                    'max_depth': max_depth,
+                    'learning_rate': learning_rate
+                },
+                'performance': {
+                    'train_rmse': float(train_rmse),
+                    'test_rmse': float(test_rmse),
+                    'train_mae': float(train_mae),
+                    'test_mae': float(test_mae),
+                    'train_r2': float(train_r2),
+                    'test_r2': float(test_r2),
+                    'cv_r2_mean': float(np.mean(cv_scores)),
+                    'cv_r2_std': float(np.std(cv_scores))
+                },
+                'feature_importance': feature_importance.to_dict('records')
+            }
+            
+            results_filename = f"train_xgboost_price_predictor_{symbol}_results_{timestamp}.json"
+            results_filepath = os.path.join(OUTPUT_DIR, results_filename)
+            with open(results_filepath, 'w') as f:
+                json.dump(results, f, indent=2)
+        
+        # Create summary
+        summary = f"""train_xgboost_price_predictor: Successfully trained XGBoost model for {symbol}:
+
+🤖 MODEL CONFIGURATION:
+- Algorithm: XGBoost Regressor
+- Symbol: {symbol}
+- Target: {target_days}-day ahead price prediction
+- Data Source: {data_source}
+- Features: {len(feature_cols)} technical indicators
+- Training Samples: {len(X_train)}
+- Test Samples: {len(X_test)}
+
+⚙️ HYPERPARAMETERS:
+- N Estimators: {n_estimators}
+- Max Depth: {max_depth}
+- Learning Rate: {learning_rate}
+
+📊 MODEL PERFORMANCE:
+- Training RMSE: ${train_rmse:.3f}
+- Test RMSE: ${test_rmse:.3f}
+- Training MAE: ${train_mae:.3f}
+- Test MAE: ${test_mae:.3f}
+- Training R²: {train_r2:.3f}
+- Test R²: {test_r2:.3f}
+- Cross-Val R²: {np.mean(cv_scores):.3f} (±{np.std(cv_scores):.3f})
+
+🎯 TOP 5 IMPORTANT FEATURES:
+{chr(10).join([f"  {i+1}. {row['feature']}: {row['importance']:.3f}" for i, row in feature_importance.head().iterrows()])}
+
+📁 FILES SAVED:
+- Model: {model_filename if model_filename else 'Not saved'}
+- Results: {results_filename if results_filename else 'Not saved'}
+
+💡 MODEL INSIGHTS:
+- Overfitting Risk: {'High' if train_r2 - test_r2 > 0.1 else 'Low' if train_r2 - test_r2 < 0.05 else 'Moderate'}
+- Model Quality: {'Excellent' if test_r2 > 0.8 else 'Good' if test_r2 > 0.6 else 'Fair' if test_r2 > 0.4 else 'Poor'}
+- Prediction Accuracy: ±${test_mae:.2f} average error on test set
+"""
+        
+        return summary
+        
+    except Exception as e:
+        return f"train_xgboost_price_predictor: Error training model for {symbol}: {str(e)}"
+
+
+@tool
+def train_random_forest_price_predictor(
+    symbol: str,
+    source_file: Optional[str] = None,
+    target_days: int = 1,
+    test_size: float = 0.2,
+    n_estimators: int = 100,
+    max_depth: Optional[int] = None,
+    min_samples_split: int = 2,
+    save_model: bool = True
+) -> str:
+    """
+    Train a Random Forest model to predict stock prices using technical indicators.
+    
+    Args:
+        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
+        source_file: Enhanced CSV file with technical indicators (if None, uses most recent)
+        target_days: Number of days ahead to predict (1 = next day, 5 = next week)
+        test_size: Proportion of data for testing (0.2 = 20%)
+        n_estimators: Number of trees in the forest
+        max_depth: Maximum depth of trees (None = unlimited)
+        min_samples_split: Minimum samples required to split a node
+        save_model: Whether to save the trained model
+        
+    Returns:
+        String with model performance metrics and file locations
+    """
+    try:
+        symbol = symbol.upper()
+        
+        # Load enhanced data with technical indicators
+        if source_file:
+            if not source_file.endswith('.csv'):
+                source_file += '.csv'
+            filepath = os.path.join(OUTPUT_DIR, source_file)
+            if not os.path.exists(filepath):
+                return f"train_random_forest_price_predictor: Source file '{source_file}' not found."
+            data = pd.read_csv(filepath, index_col=0, parse_dates=True)
+            data_source = f"file: {source_file}"
+        else:
+            # Find most recent enhanced data file
+            enhanced_files = [f for f in os.listdir(OUTPUT_DIR) if 
+                            f.startswith(f"apply_technical_indicators_and_transformations_{symbol}_") and f.endswith('.csv')]
+            if enhanced_files:
+                latest_file = max(enhanced_files, key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
+                filepath = os.path.join(OUTPUT_DIR, latest_file)
+                data = pd.read_csv(filepath, index_col=0, parse_dates=True)
+                data_source = f"enhanced file: {latest_file}"
+            else:
+                return f"train_random_forest_price_predictor: No enhanced data files found for {symbol}. Please run technical indicators first."
+        
+        if data.empty or len(data) < 50:
+            return f"train_random_forest_price_predictor: Insufficient data for {symbol}. Need at least 50 records."
+        
+        # Prepare features and target
+        data['Target'] = data['Close'].shift(-target_days)
+        
+        # Select feature columns
+        exclude_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'Dividends', 'Stock Splits', 'Target']
+        feature_cols = [col for col in data.columns if col not in exclude_cols and not data[col].isnull().all()]
+        
+        if len(feature_cols) < 3:
+            return f"train_random_forest_price_predictor: Insufficient technical indicators. Found only {len(feature_cols)} features."
+        
+        # Remove rows with NaN values
+        model_data = data[feature_cols + ['Target']].dropna()
+        
+        if len(model_data) < 30:
+            return f"train_random_forest_price_predictor: Insufficient clean data. Only {len(model_data)} records available."
+        
+        X = model_data[feature_cols]
+        y = model_data['Target']
+        
+        # Time series split
+        tscv = TimeSeriesSplit(n_splits=3)
+        cv_scores = []
+        
+        # Train-test split
+        split_idx = int(len(X) * (1 - test_size))
+        X_train, X_test = X[:split_idx], X[split_idx:]
+        y_train, y_test = y[:split_idx], y[split_idx:]
+        
+        # Scale features
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        
+        # Train Random Forest model
+        model = RandomForestRegressor(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            random_state=42,
+            n_jobs=-1
+        )
+        
+        model.fit(X_train_scaled, y_train)
+        
+        # Make predictions
+        train_pred = model.predict(X_train_scaled)
+        test_pred = model.predict(X_test_scaled)
+        
+        # Calculate metrics
+        train_rmse = np.sqrt(mean_squared_error(y_train, train_pred))
+        test_rmse = np.sqrt(mean_squared_error(y_test, test_pred))
+        train_mae = mean_absolute_error(y_train, train_pred)
+        test_mae = mean_absolute_error(y_test, test_pred)
+        train_r2 = r2_score(y_train, train_pred)
+        test_r2 = r2_score(y_test, test_pred)
+        
+        # Cross-validation
+        for train_idx, val_idx in tscv.split(X):
+            X_cv_train, X_cv_val = X.iloc[train_idx], X.iloc[val_idx]
+            y_cv_train, y_cv_val = y.iloc[train_idx], y.iloc[val_idx]
+            
+            X_cv_train_scaled = scaler.fit_transform(X_cv_train)
+            X_cv_val_scaled = scaler.transform(X_cv_val)
+            
+            cv_model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth,
+                                          min_samples_split=min_samples_split, random_state=42)
+            cv_model.fit(X_cv_train_scaled, y_cv_train)
+            cv_pred = cv_model.predict(X_cv_val_scaled)
+            cv_scores.append(r2_score(y_cv_val, cv_pred))
+        
+        # Feature importance
+        feature_importance = pd.DataFrame({
+            'feature': feature_cols,
+            'importance': model.feature_importances_
+        }).sort_values('importance', ascending=False)
+        
+        # Save model and results
+        model_filename = None
+        results_filename = None
+        if save_model:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Save model
+            model_filename = f"train_random_forest_price_predictor_{symbol}_model_{timestamp}.pkl"
+            model_filepath = os.path.join(OUTPUT_DIR, model_filename)
+            with open(model_filepath, 'wb') as f:
+                pickle.dump({
+                    'model': model,
+                    'scaler': scaler,
+                    'feature_cols': feature_cols,
+                    'target_days': target_days,
+                    'symbol': symbol
+                }, f)
+            
+            # Save results
+            results = {
+                'symbol': symbol,
+                'target_days': target_days,
+                'data_source': data_source,
+                'training_samples': len(X_train),
+                'test_samples': len(X_test),
+                'features_used': feature_cols,
+                'model_params': {
+                    'n_estimators': n_estimators,
+                    'max_depth': max_depth,
+                    'min_samples_split': min_samples_split
+                },
+                'performance': {
+                    'train_rmse': float(train_rmse),
+                    'test_rmse': float(test_rmse),
+                    'train_mae': float(train_mae),
+                    'test_mae': float(test_mae),
+                    'train_r2': float(train_r2),
+                    'test_r2': float(test_r2),
+                    'cv_r2_mean': float(np.mean(cv_scores)),
+                    'cv_r2_std': float(np.std(cv_scores))
+                },
+                'feature_importance': feature_importance.to_dict('records')
+            }
+            
+            results_filename = f"train_random_forest_price_predictor_{symbol}_results_{timestamp}.json"
+            results_filepath = os.path.join(OUTPUT_DIR, results_filename)
+            with open(results_filepath, 'w') as f:
+                json.dump(results, f, indent=2)
+        
+        # Create summary
+        summary = f"""train_random_forest_price_predictor: Successfully trained Random Forest model for {symbol}:
+
+🌲 MODEL CONFIGURATION:
+- Algorithm: Random Forest Regressor
+- Symbol: {symbol}
+- Target: {target_days}-day ahead price prediction
+- Data Source: {data_source}
+- Features: {len(feature_cols)} technical indicators
+- Training Samples: {len(X_train)}
+- Test Samples: {len(X_test)}
+
+⚙️ HYPERPARAMETERS:
+- N Estimators: {n_estimators}
+- Max Depth: {max_depth if max_depth else 'Unlimited'}
+- Min Samples Split: {min_samples_split}
+
+📊 MODEL PERFORMANCE:
+- Training RMSE: ${train_rmse:.3f}
+- Test RMSE: ${test_rmse:.3f}
+- Training MAE: ${train_mae:.3f}
+- Test MAE: ${test_mae:.3f}
+- Training R²: {train_r2:.3f}
+- Test R²: {test_r2:.3f}
+- Cross-Val R²: {np.mean(cv_scores):.3f} (±{np.std(cv_scores):.3f})
+
+🎯 TOP 5 IMPORTANT FEATURES:
+{chr(10).join([f"  {i+1}. {row['feature']}: {row['importance']:.3f}" for i, row in feature_importance.head().iterrows()])}
+
+📁 FILES SAVED:
+- Model: {model_filename if model_filename else 'Not saved'}
+- Results: {results_filename if results_filename else 'Not saved'}
+
+💡 MODEL INSIGHTS:
+- Overfitting Risk: {'High' if train_r2 - test_r2 > 0.1 else 'Low' if train_r2 - test_r2 < 0.05 else 'Moderate'}
+- Model Quality: {'Excellent' if test_r2 > 0.8 else 'Good' if test_r2 > 0.6 else 'Fair' if test_r2 > 0.4 else 'Poor'}
+- Prediction Accuracy: ±${test_mae:.2f} average error on test set
+- Model Stability: {'High' if np.std(cv_scores) < 0.1 else 'Moderate' if np.std(cv_scores) < 0.2 else 'Low'}
+"""
+        
+        return summary
+        
+    except Exception as e:
+        return f"train_random_forest_price_predictor: Error training model for {symbol}: {str(e)}"
+    
+
+@tool
+def debug_file_system(
+    symbol: Optional[str] = None,
+    show_content: bool = False
+) -> str:
+    """
+    Debug tool to check file system status and help troubleshoot file-related issues.
+    
+    Args:
+        symbol: Stock symbol to check files for (optional)
+        show_content: Whether to show sample content from CSV files
+        
+    Returns:
+        String with detailed file system information
+    """
+    try:
+        # Check if output directory exists
+        if not os.path.exists(OUTPUT_DIR):
+            return f"debug_file_system: Output directory '{OUTPUT_DIR}' does not exist. Creating it now..."
+        
+        # Get all files in output directory
+        try:
+            all_files = os.listdir(OUTPUT_DIR)
+        except Exception as e:
+            return f"debug_file_system: Error reading output directory: {str(e)}"
+        
+        if not all_files:
+            return f"debug_file_system: Output directory '{OUTPUT_DIR}' is empty. No files found."
+        
+        # Categorize files
+        csv_files = [f for f in all_files if f.endswith('.csv')]
+        pkl_files = [f for f in all_files if f.endswith('.pkl')]
+        json_files = [f for f in all_files if f.endswith('.json')]
+        html_files = [f for f in all_files if f.endswith('.html')]
+        other_files = [f for f in all_files if not any(f.endswith(ext) for ext in ['.csv', '.pkl', '.json', '.html'])]
+        
+        # If symbol specified, filter for that symbol
+        if symbol:
+            symbol = symbol.upper()
+            symbol_csv = [f for f in csv_files if symbol in f.upper()]
+            symbol_pkl = [f for f in pkl_files if symbol in f.upper()]
+            symbol_json = [f for f in json_files if symbol in f.upper()]
+            symbol_html = [f for f in html_files if symbol in f.upper()]
+        
+        # Build detailed report
+        report = f"debug_file_system: File system analysis for output directory '{OUTPUT_DIR}':\n\n"
+        
+        # Overall statistics
+        report += f"📊 DIRECTORY OVERVIEW:\n"
+        report += f"- Total Files: {len(all_files)}\n"
+        report += f"- CSV Files: {len(csv_files)}\n"
+        report += f"- Model Files (.pkl): {len(pkl_files)}\n"
+        report += f"- Results Files (.json): {len(json_files)}\n"
+        report += f"- Chart Files (.html): {len(html_files)}\n"
+        report += f"- Other Files: {len(other_files)}\n\n"
+        
+        # Symbol-specific analysis
+        if symbol:
+            report += f"🎯 FILES FOR SYMBOL '{symbol}':\n"
+            report += f"- CSV Files: {len(symbol_csv)}\n"
+            report += f"- Model Files: {len(symbol_pkl)}\n"
+            report += f"- Results Files: {len(symbol_json)}\n"
+            report += f"- Chart Files: {len(symbol_html)}\n\n"
+            
+            if symbol_csv:
+                report += f"📋 {symbol} CSV FILES:\n"
+                for file in sorted(symbol_csv):
+                    filepath = os.path.join(OUTPUT_DIR, file)
+                    size = os.path.getsize(filepath)
+                    modified = datetime.fromtimestamp(os.path.getmtime(filepath))
+                    report += f"  - {file} ({size:,} bytes, {modified.strftime('%Y-%m-%d %H:%M:%S')})\n"
+                report += "\n"
+        
+        # All CSV files with details
+        if csv_files:
+            report += f"📈 ALL CSV FILES:\n"
+            for file in sorted(csv_files):
+                filepath = os.path.join(OUTPUT_DIR, file)
+                size = os.path.getsize(filepath)
+                modified = datetime.fromtimestamp(os.path.getmtime(filepath))
+                
+                # Try to get basic info about the CSV
+                try:
+                    df = pd.read_csv(filepath, index_col=0, parse_dates=True, nrows=5)
+                    rows_info = f"{len(df)} rows (sample)"
+                    cols_info = f"{len(df.columns)} columns"
+                    date_range = f"dates: {df.index[0].strftime('%Y-%m-%d')} to {df.index[-1].strftime('%Y-%m-%d')}" if len(df) > 0 else "no dates"
+                except:
+                    rows_info = "unknown rows"
+                    cols_info = "unknown columns"
+                    date_range = "date info unavailable"
+                
+                report += f"  - {file}\n"
+                report += f"    Size: {size:,} bytes | Modified: {modified.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                report += f"    Data: {rows_info}, {cols_info}, {date_range}\n"
+                
+                # Show content sample if requested
+                if show_content:
+                    try:
+                        sample_df = pd.read_csv(filepath, index_col=0, parse_dates=True, nrows=3)
+                        report += f"    Sample:\n{sample_df.to_string()}\n"
+                    except Exception as e:
+                        report += f"    Sample: Error reading content - {str(e)}\n"
+                report += "\n"
+        
+        # Model files
+        if pkl_files:
+            report += f"🤖 MODEL FILES (.pkl):\n"
+            for file in sorted(pkl_files):
+                filepath = os.path.join(OUTPUT_DIR, file)
+                size = os.path.getsize(filepath)
+                modified = datetime.fromtimestamp(os.path.getmtime(filepath))
+                report += f"  - {file} ({size:,} bytes, {modified.strftime('%Y-%m-%d %H:%M:%S')})\n"
+            report += "\n"
+        
+        # Results files
+        if json_files:
+            report += f"📊 RESULTS FILES (.json):\n"
+            for file in sorted(json_files):
+                filepath = os.path.join(OUTPUT_DIR, file)
+                size = os.path.getsize(filepath)
+                modified = datetime.fromtimestamp(os.path.getmtime(filepath))
+                report += f"  - {file} ({size:,} bytes, {modified.strftime('%Y-%m-%d %H:%M:%S')})\n"
+            report += "\n"
+        
+        # File type patterns
+        report += f"🔍 FILE PATTERN ANALYSIS:\n"
+        
+        # Count by pattern
+        fetch_files = [f for f in csv_files if f.startswith('fetch_yahoo_finance_data_')]
+        indicator_files = [f for f in csv_files if f.startswith('apply_technical_indicators_and_transformations_')]
+        model_files_xgb = [f for f in pkl_files if 'xgboost' in f]
+        model_files_rf = [f for f in pkl_files if 'random_forest' in f]
+        backtest_files = [f for f in json_files if 'backtest' in f]
+        
+        report += f"- Raw Stock Data Files: {len(fetch_files)}\n"
+        report += f"- Enhanced Indicator Files: {len(indicator_files)}\n"
+        report += f"- XGBoost Models: {len(model_files_xgb)}\n"
+        report += f"- Random Forest Models: {len(model_files_rf)}\n"
+        report += f"- Backtest Results: {len(backtest_files)}\n\n"
+        
+        # Recommendations
+        report += f"💡 RECOMMENDATIONS:\n"
+        if not csv_files:
+            report += "- No CSV files found. Run fetch_yahoo_finance_data first.\n"
+        elif not indicator_files:
+            report += "- No enhanced data files found. Run apply_technical_indicators_and_transformations.\n"
+        elif not pkl_files:
+            report += "- No trained models found. Train models using train_xgboost_price_predictor or train_random_forest_price_predictor.\n"
+        elif not backtest_files:
+            report += "- No backtest results found. Run backtest_model_strategy to evaluate models.\n"
+        else:
+            report += "- All file types present. System appears to be working correctly.\n"
+        
+        # Show file paths for debugging
+        report += f"\n🛠️ DEBUGGING INFO:\n"
+        report += f"- Output Directory: {os.path.abspath(OUTPUT_DIR)}\n"
+        report += f"- Directory Exists: {os.path.exists(OUTPUT_DIR)}\n"
+        report += f"- Directory Writable: {os.access(OUTPUT_DIR, os.W_OK) if os.path.exists(OUTPUT_DIR) else 'N/A'}\n"
+        report += f"- Current Working Directory: {os.getcwd()}\n"
+        
+        return report
+        
+    except Exception as e:
+        return f"debug_file_system: Error during analysis: {str(e)}"

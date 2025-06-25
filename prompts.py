@@ -84,7 +84,10 @@ TOOL_DESCRIPTIONS = {
     'visualize_stock_data': 'Create professional charts (line, candlestick, volume, combined) and save as PNG files',
     'save_text_to_file': 'Save any text content to files (markdown, txt, csv, etc.) in the output directory',
     'read_csv_data': 'Read and analyze CSV data files to extract statistics, insights, and sample data',
-    'apply_technical_indicators_and_transformations': 'Apply technical indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.) and transformations to stock data'  # NEW
+    'apply_technical_indicators_and_transformations': 'Apply technical indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.) and transformations to stock data',
+    'train_xgboost_price_predictor': 'Train XGBoost machine learning model to predict stock prices using technical indicators',  # NEW
+    'train_random_forest_price_predictor': 'Train Random Forest machine learning model to predict stock prices using technical indicators',  # NEW
+    'backtest_model_strategy': 'Backtest trained ML models using various trading strategies with comprehensive performance metrics'  # NEW
 }
 
 def get_tools_description(tool_names: List[str]) -> str:
@@ -158,9 +161,11 @@ STOCK_ANALYZER_PROMPT = lambda tools: f"""You are the Stock Analyzer specialist.
 🎯 CORE FUNCTIONS:
 - Analyze stock data patterns, trends, and performance metrics
 - Create various types of stock visualizations and charts
+- Train machine learning models to predict stock prices
+- Backtest model performance using historical data
 - Interpret price movements, volume patterns, and market behavior
 - Calculate technical indicators and statistical measures
-- Provide insights on stock performance and trends
+- Provide insights on stock performance and trading strategies
 
 🛠️ AVAILABLE TOOLS:
 {get_tools_description(tools)}
@@ -171,27 +176,51 @@ STOCK_ANALYZER_PROMPT = lambda tools: f"""You are the Stock Analyzer specialist.
 - Volume charts: Trading volume patterns
 - Combined charts: Price + volume for comprehensive analysis
 
+🤖 MACHINE LEARNING CAPABILITIES:
+- XGBoost Modeling: Advanced gradient boosting for price prediction
+- Random Forest Modeling: Ensemble learning for robust predictions
+- Feature Engineering: Use technical indicators as model inputs
+- Model Evaluation: Comprehensive performance metrics and validation
+- Backtesting: Test model strategies against historical data
+
 🔍 ANALYSIS CAPABILITIES:
 - Price trend analysis (bullish, bearish, sideways)
 - Support and resistance level identification
 - Volume analysis and trading patterns
 - Price volatility assessment
 - Performance metrics calculation
+- Predictive modeling and forecasting
+- Strategy development and validation
 
-📊 WHAT YOU ANALYZE:
+📊 MODELING WORKFLOW:
+1. Use enhanced data with technical indicators from data fetcher
+2. Train multiple ML models (XGBoost, Random Forest)
+3. Compare model performance and select best approach
+4. Backtest strategies using different signal types
+5. Analyze risk-adjusted returns and drawdowns
+
+🎯 BACKTESTING STRATEGIES:
+- Threshold-based: Buy/sell based on predicted return thresholds
+- Directional: Trade based on predicted price direction
+- Percentile: Use prediction percentiles for signal generation
+- Performance metrics: Sharpe ratio, max drawdown, win rate
+- Benchmark comparison: Compare against buy-and-hold strategy
+
+📈 WHAT YOU ANALYZE:
 - Current price vs historical performance
-- 52-week highs and lows
-- Price change percentages
-- Trading volume trends
-- Market patterns and signals
+- Model prediction accuracy and reliability
+- Trading strategy profitability and risk
+- Risk-adjusted performance metrics
+- Feature importance and model interpretability
+- Market patterns and predictive signals
 
 🚫 WHAT YOU DON'T DO:
 - Don't fetch new data (ask data fetcher for that)
 - Don't create final reports (that's for the reporter)
 - Don't provide investment advice or recommendations
+- Results are for analysis purposes only, not trading advice
 
-Always create meaningful visualizations and provide clear analytical insights."""
-
+Always create meaningful visualizations, train robust models, and provide clear analytical insights with proper risk disclaimers."""
 
 
 
@@ -245,7 +274,7 @@ Use your analytical capabilities to examine all available files, understand the 
 
 
 
-def make_system_prompt_with_handoffs(role_description: str, possible_handoffs: List[str]) -> str:
+def make_system_prompt_with_handoffs(role_description: str) -> str:
     """
     Create a system prompt that includes handoff instructions.
     
@@ -282,15 +311,15 @@ def make_system_prompt_with_handoffs(role_description: str, possible_handoffs: L
     - Reference saved files and data when applicable
     """
     
-    if possible_handoffs:
-        agent_list = ", ".join(possible_handoffs)
-        handoff_instructions = (
-            f"\n\n🔄 HANDOFF INSTRUCTIONS:\n"
-            f"When you need to hand off to another agent, write 'Handoff to [AGENT_NAME]' "
-            f"where AGENT_NAME is one of: {agent_list}. "
-            f"If your work is complete and no further assistance is needed, end your response with 'FINAL ANSWER'."
-        )
-    else:
-        handoff_instructions = "\n\nIf your work is complete, end your response with 'FINAL ANSWER'."
+    # if possible_handoffs:
+    #     agent_list = ", ".join(possible_handoffs)
+    #     handoff_instructions = (
+    #         f"\n\n🔄 HANDOFF INSTRUCTIONS:\n"
+    #         f"When you need to hand off to another agent, write 'Handoff to [AGENT_NAME]' "
+    #         f"where AGENT_NAME is one of: {agent_list}. "
+    #         f"If your work is complete and no further assistance is needed, end your response with 'FINAL ANSWER'."
+    #     )
+    # else:
+    #     handoff_instructions = "\n\nIf your work is complete, end your response with 'FINAL ANSWER'."
     
-    return f"{base_prompt}{team_context}{role_context}{collaboration_guidelines}{handoff_instructions}"
+    return f"{base_prompt}{team_context}{role_context}{collaboration_guidelines}"
