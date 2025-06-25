@@ -12,4 +12,15 @@ langgraph
 tavily-python
 python-dotenv
 
+# Stock data fetching dependencies
+yfinance
+pandas
+numpy
+
+# Machine learning and visualization dependencies
+scikit-learn
+seaborn
+joblib
+markdown2
+
 # Memory handling uses standard library uuid and langchain_core.chat_history
