@@ -332,7 +332,7 @@ def visualize_stock_data(
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
             plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
         
-        plt.tight_layout()
+        plt.tight_layout(pad=2.0)
         
         # Save chart (always save in multi-agent environment)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
