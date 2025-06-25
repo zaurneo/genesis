@@ -18,6 +18,100 @@ OUTPUT_DIR = "output"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 @tool
+def read_csv_data(
+    filename: str,
+    max_rows: int = 100
+) -> str:
+    """
+    Read and analyze CSV data from the output directory.
+    This allows the AI agent to examine stock data and extract insights.
+    
+    Args:
+        filename: Name of the CSV file to read (include .csv extension)
+        max_rows: Maximum number of rows to display (default 100, set to -1 for all)
+        
+    Returns:
+        String with data summary, statistics, and sample data
+    """
+    try:
+        filepath = os.path.join(OUTPUT_DIR, filename)
+        
+        if not os.path.exists(filepath):
+            available_files = [f for f in os.listdir(OUTPUT_DIR) if f.endswith('.csv')]
+            return f"File '{filename}' not found. Available CSV files: {', '.join(available_files) if available_files else 'None'}"
+        
+        # Read the CSV file
+        data = pd.read_csv(filepath, index_col=0, parse_dates=True)
+        
+        if data.empty:
+            return f"The file '{filename}' is empty."
+        
+        # Calculate comprehensive statistics
+        stats = {}
+        if 'Close' in data.columns:
+            stats['current_price'] = data['Close'].iloc[-1]
+            stats['opening_price'] = data['Close'].iloc[0]
+            stats['price_change'] = data['Close'].iloc[-1] - data['Close'].iloc[0]
+            stats['price_change_pct'] = (stats['price_change'] / data['Close'].iloc[0] * 100)
+            stats['period_high'] = data['High'].max() if 'High' in data.columns else data['Close'].max()
+            stats['period_low'] = data['Low'].min() if 'Low' in data.columns else data['Close'].min()
+            stats['volatility'] = data['Close'].pct_change().std() * 100
+        
+        if 'Volume' in data.columns:
+            stats['avg_volume'] = data['Volume'].mean()
+            stats['total_volume'] = data['Volume'].sum()
+            stats['max_volume'] = data['Volume'].max()
+        
+        # Format data sample
+        sample_rows = data.head(max_rows) if max_rows > 0 else data
+        
+        # Create comprehensive summary
+        summary = f"""
+📊 CSV DATA ANALYSIS for {filename}:
+
+📈 DATASET OVERVIEW:
+- Total Records: {len(data)}
+- Date Range: {data.index[0].strftime('%Y-%m-%d')} to {data.index[-1].strftime('%Y-%m-%d')}
+- Columns: {', '.join(data.columns)}
+- File Size: {os.path.getsize(filepath):,} bytes
+
+"""
+        
+        if stats:
+            summary += f"""💰 PRICE STATISTICS:
+- Current Price: ${stats.get('current_price', 0):.2f}
+- Opening Price: ${stats.get('opening_price', 0):.2f}
+- Period High: ${stats.get('period_high', 0):.2f}
+- Period Low: ${stats.get('period_low', 0):.2f}
+- Price Change: ${stats.get('price_change', 0):.2f} ({stats.get('price_change_pct', 0):.2f}%)
+- Volatility: {stats.get('volatility', 0):.2f}%
+
+"""
+        
+        if 'avg_volume' in stats:
+            summary += f"""📊 VOLUME STATISTICS:
+- Average Volume: {stats['avg_volume']:,.0f}
+- Total Volume: {stats['total_volume']:,.0f}
+- Maximum Volume: {stats['max_volume']:,.0f}
+
+"""
+        
+        summary += f"""📋 SAMPLE DATA ({min(len(sample_rows), max_rows)} of {len(data)} rows):
+{sample_rows.to_string()}
+
+💡 QUICK INSIGHTS:
+- Data Quality: {'Complete' if not data.isnull().any().any() else 'Contains missing values'}
+- Trend: {'Upward' if stats.get('price_change_pct', 0) > 0 else 'Downward' if stats.get('price_change_pct', 0) < 0 else 'Flat'}
+- Volatility Level: {'High' if stats.get('volatility', 0) > 3 else 'Moderate' if stats.get('volatility', 0) > 1 else 'Low'}
+"""
+        
+        return summary
+        
+    except Exception as e:
+        return f"Error reading CSV file '{filename}': {str(e)}"
+
+
+@tool
 def fetch_yahoo_finance_data(
     symbol: str,
     period: str = "1mo",
@@ -288,7 +382,6 @@ The visualization shows price movements and trading patterns for the selected pe
 
 
 
-
 @tool
 def list_saved_stock_files() -> str:
     """
@@ -334,3 +427,64 @@ def list_saved_stock_files() -> str:
         
     except Exception as e:
         return f"Error listing files: {str(e)}"
+
+
+@tool
+def save_text_to_file(
+    content: str,
+    filename: str,
+    file_format: str = "md"
+) -> str:
+    """
+    Save text content to a file in the output directory.
+    The AI agent can use this to create reports, summaries, or any text documents.
+    
+    Args:
+        content: The text content to save
+        filename: Name for the file (without extension)
+        file_format: File extension/format (md, txt, csv, etc.)
+        
+    Returns:
+        String description of the saved file and its location
+    """
+    try:
+        # Clean filename and add timestamp if needed
+        clean_filename = filename.replace(" ", "_").replace("/", "_").replace("\\", "_")
+        
+        # Add timestamp if filename doesn't already have one
+        if not any(char.isdigit() for char in clean_filename[-15:]):
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            clean_filename = f"{clean_filename}_{timestamp}"
+        
+        # Add file extension
+        if not clean_filename.endswith(f".{file_format}"):
+            clean_filename = f"{clean_filename}.{file_format}"
+        
+        # Save to output directory
+        filepath = os.path.join(OUTPUT_DIR, clean_filename)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        file_size = os.path.getsize(filepath)
+        
+        summary = f"""
+📄 FILE SUCCESSFULLY SAVED:
+
+📁 FILE DETAILS:
+- Filename: {clean_filename}
+- Location: {filepath}
+- Format: {file_format.upper()}
+- Size: {file_size:,} bytes ({len(content):,} characters)
+
+📝 CONTENT SUMMARY:
+- Lines: {content.count(chr(10)) + 1}
+- Words: {len(content.split())}
+- Characters: {len(content)}
+
+The file has been saved to the output directory and is ready for use.
+"""        
+        return summary
+        
+    except Exception as e:
+        return f"Error saving file: {str(e)}"

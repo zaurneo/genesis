@@ -11,5 +11,7 @@ langgraph
 # Additional required dependencies
 tavily-python
 python-dotenv
+yfinance
+pandas
 
 # Memory handling uses standard library uuid and langchain_core.chat_history
