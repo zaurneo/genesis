@@ -1,6 +1,5 @@
 from langgraph.prebuilt import create_react_agent
 from langgraph.graph import END
-from utils import make_node_with_multiple_routes_and_memory
 from models import model_gpt_4o_mini
 from tools import (
     tavily_tool, 
@@ -39,17 +38,13 @@ stock_data_fetcher_tools = [
 stock_data_agent = create_react_agent(
     model = model_gpt_4o_mini,
     tools=stock_data_fetcher_tools,
+    name = "stock_data_agent",
     prompt=make_system_prompt_with_handoffs(
         STOCK_DATA_FETCHER_PROMPT([tool.name for tool in stock_data_fetcher_tools]),
         ["stock_analyzer", "stock_reporter"]
     ),
 )
 
-stock_data_node = make_node_with_multiple_routes_and_memory(
-    agent=stock_data_agent,
-    next_nodes=["stock_analyzer", "stock_reporter", END],
-    name="stock_data_fetcher"
-)
 
 
 # Stock Analyzer agent and node
@@ -61,17 +56,13 @@ stock_analyzer_tools = [
 stock_analyzer_agent = create_react_agent(
     model = model_gpt_4o_mini,
     tools = stock_analyzer_tools,
+    name = "stock_analyzer_agent",
     prompt=make_system_prompt_with_handoffs(
         STOCK_ANALYZER_PROMPT([tool.name for tool in stock_analyzer_tools]),
         ["stock_data_fetcher", "stock_reporter"]
     ),
 )
 
-stock_analyzer_node = make_node_with_multiple_routes_and_memory(
-    agent=stock_analyzer_agent,
-    next_nodes=["stock_data_fetcher", "stock_reporter", END],
-    name="stock_analyzer"
-)
 
 
 # Stock Reporter agent and node
@@ -84,14 +75,9 @@ stock_reporter_tools = [
 stock_reporter_agent = create_react_agent(
     model = model_gpt_4o_mini,
     tools = stock_reporter_tools,
+    name = "stock_reporter_agent",
     prompt=make_system_prompt_with_handoffs(
         STOCK_REPORTER_PROMPT([tool.name for tool in stock_reporter_tools]),
         ["stock_data_fetcher", "stock_analyzer"]
     ),
-)
-
-stock_reporter_node = make_node_with_multiple_routes_and_memory(
-    agent=stock_reporter_agent,
-    next_nodes=["stock_data_fetcher", "stock_analyzer", END],
-    name="stock_reporter"
 )

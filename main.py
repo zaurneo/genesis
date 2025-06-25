@@ -1,71 +1,47 @@
 #!/usr/bin/env python3
 """
-Multi-agent collaboration main execution script.
+Multi-agent collaboration main execution script with supervisor.
 """
 
-import uuid
-from typing import Annotated, Literal
-from langchain_core.tools import tool
-from langchain_core.messages import BaseMessage, HumanMessage
-from langchain_experimental.utilities import PythonREPL
-from langchain_anthropic import ChatAnthropic
-from langgraph.prebuilt import create_react_agent
-from langgraph.graph import MessagesState, END, StateGraph, START
-from langgraph.types import Command
+from langgraph_supervisor import create_supervisor
 from agents import *
-from utils import pretty_print_session_info, pretty_print_step_separator
+from models import model_gpt_4o_mini
 
-"""Create and compile the multi-agent graph."""
-workflow = StateGraph(MessagesState)
-workflow.add_node("stock_data_fetcher", stock_data_node)
-workflow.add_node("stock_analyzer", stock_analyzer_node)
-workflow.add_node("stock_reporter", stock_reporter_node)
-
-workflow.add_edge(START, "stock_data_fetcher")
-graph = workflow.compile()
-
-# Create a unique session ID for this conversation
-session_id = uuid.uuid4()
-config = {
-    "configurable": {"session_id": session_id},
-    "recursion_limit": 150
-}
-
-# Print session information
-pretty_print_session_info(session_id)
-
-# Example query
-print("🚀 Processing Query: 'Get Apple stock data, analyze its performance, and create a summary report.'\n")
-
-events = graph.stream(
-    {
-        "messages": [
-            HumanMessage(
-                content="Get Apple stock data, analyze its performance, and create a summary report."
-            )
-        ],
-    },
-    config=config,
-    stream_mode="values"
+# Create supervisor workflow
+workflow = create_supervisor(
+    # Pass the individual agents (not the nodes)
+    [stock_data_agent, stock_analyzer_agent, stock_reporter_agent],
+    model=model_gpt_4o_mini,
+    output_mode="full_history",
+    prompt=(
+        "You are a team supervisor managing a specialized stock analysis team with three experts:\n\n"
+        "1. **stock_data_fetcher**: Fetches real-time and historical stock data from Yahoo Finance, "
+        "saves data to CSV files, and provides market information. Use for data collection tasks.\n\n"
+        "2. **stock_analyzer**: Analyzes stock data and creates visualizations (line charts, candlestick charts, "
+        "volume charts, combined charts). Use for technical analysis and chart creation.\n\n"
+        "3. **stock_reporter**: Creates comprehensive stock analysis reports and summaries, "
+        "combining data and analysis into professional documentation. Use for final report generation.\n\n"
+        "**SUPERVISION STRATEGY:**\n"
+        "- For data fetching requests: assign to stock_data_fetcher\n"
+        "- For analysis and visualization requests: assign to stock_analyzer\n"
+        "- For report creation requests: assign to stock_reporter\n"
+        "- For comprehensive requests: coordinate the workflow (data → analysis → report)\n\n"
+        "Always ensure the right specialist handles each task for optimal results."
+    )
 )
 
-# Process and pretty print results
-step_count = 0
-for event in events:
-    step_count += 1
-    print(f"📝 Step {step_count}:")
-    
-    # Pretty print the last message in the event
-    if "messages" in event and event["messages"]:
-        if isinstance(event["messages"], list):
-            # If it's a list, get the last message
-            event["messages"][-1].pretty_print()
-        else:
-            # If it's a single message
-            event["messages"].pretty_print()
-    
-    pretty_print_step_separator()
+# Compile the workflow
+graph = workflow.compile()
 
-print("✅ Multi-Agent Analysis Complete!")
-print(f"💾 Session {session_id} saved to memory")
-print("=" * 50)
+result = graph.invoke({
+    "messages": [
+        {
+            "role": "user",
+            "content": "Processing Query: 'Get Apple stock data, analyze its performance, and create a summary report.'\n"
+        }
+    ]
+})
+
+for m in result["messages"]:
+    m.pretty_print()
+
