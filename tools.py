@@ -1,10 +1,9 @@
 import os
 import yfinance as yf
 import pandas as pd
-import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend to avoid threading issues
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+import plotly.graph_objects as go
+import plotly.subplots as sp
+from plotly.offline import plot
 from datetime import datetime, timedelta
 from typing import Optional, Literal
 from langchain_core.tools import tool
@@ -160,7 +159,7 @@ def fetch_yahoo_finance_data(
         filename = None
         if save_data:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{symbol.upper()}_{period}_{interval}_{timestamp}.csv"
+            filename = f"fetch_yahoo_finance_data_{symbol.upper()}_{period}_{interval}_{timestamp}.csv"
             filepath = os.path.join(OUTPUT_DIR, filename)
             data.to_csv(filepath)
         
@@ -232,8 +231,8 @@ def visualize_stock_data(
     period: str = "1mo"
 ) -> str:
     """
-    Create visualizations of stock data using the most recent data file or fetch new data.
-    Charts are automatically saved to the output directory.
+    Create interactive visualizations of stock data using the most recent data file or fetch new data.
+    Charts are automatically saved to the output directory as HTML files.
     
     Args:
         symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
@@ -247,7 +246,7 @@ def visualize_stock_data(
         symbol = symbol.upper()
         
         # Try to find the most recent data file for this symbol
-        data_files = [f for f in os.listdir(OUTPUT_DIR) if f.startswith(f"{symbol}_") and f.endswith('.csv')]
+        data_files = [f for f in os.listdir(OUTPUT_DIR) if f.startswith(f"fetch_yahoo_finance_data_{symbol}_") and f.endswith('.csv')]
         
         if data_files:
             # Use the most recent file
@@ -264,84 +263,127 @@ def visualize_stock_data(
         if data.empty:
             return f"No data available for {symbol} to create visualization."
         
-        # Create the visualization
+        # Create the visualization using Plotly
         if chart_type == "line":
-            fig, ax = plt.subplots(figsize=(12, 6))
-            ax.plot(data.index, data['Close'], linewidth=2, color='blue')
-            ax.set_title(f'{symbol} Stock Price - Line Chart')
-            ax.set_ylabel('Price ($)')
-            ax.grid(True, alpha=0.3)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=data.index,
+                y=data['Close'],
+                mode='lines',
+                name='Close Price',
+                line=dict(color='blue', width=2)
+            ))
+            fig.update_layout(
+                title=f'{symbol} Stock Price - Line Chart',
+                xaxis_title='Date',
+                yaxis_title='Price ($)',
+                showlegend=True,
+                hovermode='x unified'
+            )
             
         elif chart_type == "candlestick":
-            fig, ax = plt.subplots(figsize=(12, 6))
-            
-            # Create candlestick-like visualization using matplotlib
-            for i, (date, row) in enumerate(data.iterrows()):
-                color = 'green' if row['Close'] >= row['Open'] else 'red'
-                # Body
-                ax.plot([date, date], [row['Open'], row['Close']], color=color, linewidth=3)
-                # Wicks
-                ax.plot([date, date], [row['Low'], row['High']], color=color, linewidth=1)
-            
-            ax.set_title(f'{symbol} Stock Price - Candlestick Chart')
-            ax.set_ylabel('Price ($)')
-            ax.grid(True, alpha=0.3)
+            fig = go.Figure()
+            fig.add_trace(go.Candlestick(
+                x=data.index,
+                open=data['Open'],
+                high=data['High'],
+                low=data['Low'],
+                close=data['Close'],
+                name=symbol
+            ))
+            fig.update_layout(
+                title=f'{symbol} Stock Price - Candlestick Chart',
+                xaxis_title='Date',
+                yaxis_title='Price ($)',
+                xaxis_rangeslider_visible=False
+            )
             
         elif chart_type == "volume":
-            fig, ax = plt.subplots(figsize=(12, 6))
-            ax.bar(data.index, data['Volume'], alpha=0.7, color='orange')
-            ax.set_title(f'{symbol} Trading Volume')
-            ax.set_ylabel('Volume')
-            ax.grid(True, alpha=0.3)
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=data.index,
+                y=data['Volume'],
+                name='Volume',
+                marker_color='orange',
+                opacity=0.7
+            ))
+            fig.update_layout(
+                title=f'{symbol} Trading Volume',
+                xaxis_title='Date',
+                yaxis_title='Volume',
+                showlegend=True
+            )
             
         elif chart_type == "combined":
-            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
+            # Create subplots
+            fig = sp.make_subplots(
+                rows=2, cols=1,
+                subplot_titles=(f'{symbol} Stock Price', f'{symbol} Trading Volume'),
+                vertical_spacing=0.1,
+                row_heights=[0.7, 0.3]
+            )
             
-            # Price chart
-            ax1.plot(data.index, data['Close'], linewidth=2, color='blue', label='Close')
-            ax1.plot(data.index, data['High'], linewidth=1, color='green', alpha=0.7, label='High')
-            ax1.plot(data.index, data['Low'], linewidth=1, color='red', alpha=0.7, label='Low')
-            ax1.set_title(f'{symbol} Stock Analysis - Combined Chart')
-            ax1.set_ylabel('Price ($)')
-            ax1.legend()
-            ax1.grid(True, alpha=0.3)
+            # Price chart (top)
+            fig.add_trace(go.Scatter(
+                x=data.index,
+                y=data['Close'],
+                mode='lines',
+                name='Close',
+                line=dict(color='blue', width=2)
+            ), row=1, col=1)
             
-            # Volume chart
-            ax2.bar(data.index, data['Volume'], alpha=0.7, color='orange')
-            ax2.set_ylabel('Volume')
-            ax2.set_xlabel('Date')
-            ax2.grid(True, alpha=0.3)
+            fig.add_trace(go.Scatter(
+                x=data.index,
+                y=data['High'],
+                mode='lines',
+                name='High',
+                line=dict(color='green', width=1),
+                opacity=0.7
+            ), row=1, col=1)
+            
+            fig.add_trace(go.Scatter(
+                x=data.index,
+                y=data['Low'],
+                mode='lines',
+                name='Low',
+                line=dict(color='red', width=1),
+                opacity=0.7
+            ), row=1, col=1)
+            
+            # Volume chart (bottom)
+            fig.add_trace(go.Bar(
+                x=data.index,
+                y=data['Volume'],
+                name='Volume',
+                marker_color='orange',
+                opacity=0.7
+            ), row=2, col=1)
+            
+            # Update layout
+            fig.update_layout(
+                title=f'{symbol} Stock Analysis - Combined Chart',
+                showlegend=True,
+                hovermode='x unified'
+            )
+            fig.update_xaxes(title_text='Date', row=2, col=1)
+            fig.update_yaxes(title_text='Price ($)', row=1, col=1)
+            fig.update_yaxes(title_text='Volume', row=2, col=1)
         
-        # Format x-axis dates based on chart type
-        if chart_type == "combined":
-            # For combined charts, format the bottom subplot
-            if len(data) > 30:
-                ax2.xaxis.set_major_locator(mdates.MonthLocator())
-                ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-            else:
-                ax2.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(data)//10)))
-                ax2.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
-            plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45)
-        else:
-            # For single charts
-            if len(data) > 30:
-                ax.xaxis.set_major_locator(mdates.MonthLocator())
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-            else:
-                ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(data)//10)))
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
-            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+        # Common layout updates
+        fig.update_layout(
+            template='plotly_white',
+            width=1200,
+            height=600 if chart_type != "combined" else 800,
+            margin=dict(l=50, r=50, t=80, b=50)
+        )
         
-        plt.tight_layout(pad=2.0)
-        
-        # Save chart (always save in multi-agent environment)
+        # Save chart as HTML file
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        chart_filename = f"{symbol}_{chart_type}_chart_{timestamp}.png"
+        chart_filename = f"visualize_stock_data_{symbol}_{chart_type}_chart_{timestamp}.html"
         chart_filepath = os.path.join(OUTPUT_DIR, chart_filename)
-        plt.savefig(chart_filepath, dpi=300, bbox_inches='tight')
         
-        # Always close the figure to prevent memory leaks and threading issues
-        plt.close(fig)
+        # Save the interactive plot as HTML
+        plot(fig, filename=chart_filepath, auto_open=False, include_plotlyjs=True)
         
         # Calculate some basic statistics
         price_stats = {
@@ -354,10 +396,10 @@ def visualize_stock_data(
         }
         
         summary = f"""
-📈 VISUALIZATION CREATED for {symbol}:
+📈 INTERACTIVE VISUALIZATION CREATED for {symbol}:
 
 🎨 CHART DETAILS:
-- Chart Type: {chart_type.title()}
+- Chart Type: {chart_type.title()} (Interactive Plotly Chart)
 - Data Source: {data_source}
 - Data Points: {len(data)} records
 - Date Range: {data.index[0].strftime('%Y-%m-%d')} to {data.index[-1].strftime('%Y-%m-%d')}
@@ -369,10 +411,11 @@ def visualize_stock_data(
 - Price Change: ${price_stats['price_change']:.2f} ({price_stats['price_change_pct']:.2f}%)
 - Average Volume: {price_stats['avg_volume']:,.0f}
 
-📁 CHART SAVED: {chart_filename}
+📁 INTERACTIVE CHART SAVED: {chart_filename}
 - Location: {os.path.join(OUTPUT_DIR, chart_filename)}
+- Format: Interactive HTML with zoom, pan, and hover features
 
-The visualization shows price movements and trading patterns for the selected period.
+The interactive visualization includes hover data, zoom capabilities, and can be opened in any web browser.
 """
         
         return summary
@@ -399,7 +442,8 @@ def list_saved_stock_files() -> str:
             return "No files found in the output directory."
         
         data_files = [f for f in files if f.endswith('.csv')]
-        chart_files = [f for f in files if f.endswith('.png')]
+        chart_files = [f for f in files if f.endswith('.html')]
+        other_files = [f for f in files if not f.endswith(('.csv', '.html'))]
         
         summary = f"📁 FILES IN OUTPUT DIRECTORY ({OUTPUT_DIR}):\n\n"
         
@@ -413,7 +457,7 @@ def list_saved_stock_files() -> str:
             summary += "\n"
         
         if chart_files:
-            summary += "📈 CHART FILES (.png):\n"
+            summary += "📈 INTERACTIVE CHART FILES (.html):\n"
             for file in sorted(chart_files):
                 filepath = os.path.join(OUTPUT_DIR, file)
                 size = os.path.getsize(filepath)
@@ -421,7 +465,16 @@ def list_saved_stock_files() -> str:
                 summary += f"  - {file} ({size:,} bytes, modified: {modified.strftime('%Y-%m-%d %H:%M:%S')})\n"
             summary += "\n"
         
-        summary += f"📈 TOTAL FILES: {len(files)} ({len(data_files)} data, {len(chart_files)} charts)"
+        if other_files:
+            summary += "📄 OTHER FILES:\n"
+            for file in sorted(other_files):
+                filepath = os.path.join(OUTPUT_DIR, file)
+                size = os.path.getsize(filepath)
+                modified = datetime.fromtimestamp(os.path.getmtime(filepath))
+                summary += f"  - {file} ({size:,} bytes, modified: {modified.strftime('%Y-%m-%d %H:%M:%S')})\n"
+            summary += "\n"
+        
+        summary += f"📈 TOTAL FILES: {len(files)} ({len(data_files)} data, {len(chart_files)} charts, {len(other_files)} other)"
         
         return summary
         
@@ -454,7 +507,9 @@ def save_text_to_file(
         # Add timestamp if filename doesn't already have one
         if not any(char.isdigit() for char in clean_filename[-15:]):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            clean_filename = f"{clean_filename}_{timestamp}"
+            clean_filename = f"save_text_to_file_{clean_filename}_{timestamp}"
+        else:
+            clean_filename = f"save_text_to_file_{clean_filename}"
         
         # Add file extension
         if not clean_filename.endswith(f".{file_format}"):
