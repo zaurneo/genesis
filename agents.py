@@ -1,6 +1,6 @@
 from langgraph.prebuilt import create_react_agent
 from langgraph.graph import END
-from models import model_gpt_4o_mini
+from models import model_gpt_4o_mini, model_gpt_4_1
 from tools import (
     tavily_tool, 
     fetch_yahoo_finance_data, 
@@ -14,6 +14,9 @@ from tools import (
     train_random_forest_price_predictor,  # NEW
     backtest_model_strategy  # NEW
 )
+
+model_gpt = model_gpt_4_1
+
 
 from prompts import (
     make_system_prompt_with_handoffs,
@@ -42,7 +45,7 @@ stock_data_fetcher_tools = [
 ]
 
 stock_data_agent = create_react_agent(
-    model = model_gpt_4o_mini,
+    model = model_gpt,
     tools=stock_data_fetcher_tools,
     name = "stock_data_agent",
     prompt=make_system_prompt_with_handoffs(
@@ -62,7 +65,7 @@ stock_analyzer_tools = [
 ]
 
 stock_analyzer_agent = create_react_agent(
-    model = model_gpt_4o_mini,
+    model = model_gpt,
     tools = stock_analyzer_tools,
     name = "stock_analyzer_agent",
     prompt=make_system_prompt_with_handoffs(
@@ -82,7 +85,7 @@ stock_reporter_tools = [
 ]
 
 stock_reporter_agent = create_react_agent(
-    model = model_gpt_4o_mini,
+    model = model_gpt,
     tools = stock_reporter_tools,
     name = "stock_reporter_agent",
     prompt=make_system_prompt_with_handoffs(

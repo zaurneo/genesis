@@ -8,6 +8,9 @@ from datetime import datetime, timedelta
 from typing import Optional, Literal
 from langchain_core.tools import tool
 from langchain_community.tools.tavily_search import TavilySearchResults
+import pickle
+import json
+import numpy as np
 
 # Tavily tool
 tavily_tool = TavilySearchResults(max_results=5)
@@ -19,31 +22,46 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 @tool
 def read_csv_data(
     filename: str,
-    max_rows: int = 100
+    max_rows: int = 100,
+    filepath: Optional[str] = None
 ) -> str:
     """
-    Read and analyze CSV data from the output directory.
+    Read and analyze CSV data from any location or the output directory.
     This allows the AI agent to examine stock data and extract insights.
     
     Args:
         filename: Name of the CSV file to read (include .csv extension)
         max_rows: Maximum number of rows to display (default 100, set to -1 for all)
+        filepath: Full path to the file (if None, uses output directory)
         
     Returns:
         String with data summary, statistics, and sample data
     """
+    print(f"🔄 read_csv_data: Starting to read CSV file '{filename}'...")
+    
     try:
-        filepath = os.path.join(OUTPUT_DIR, filename)
+        # Determine file path
+        if filepath:
+            file_path = filepath
+        else:
+            file_path = os.path.join(OUTPUT_DIR, filename)
         
-        if not os.path.exists(filepath):
-            available_files = [f for f in os.listdir(OUTPUT_DIR) if f.endswith('.csv')]
-            return f"File '{filename}' not found. Available CSV files: {', '.join(available_files) if available_files else 'None'}"
+        if not os.path.exists(file_path):
+            if not filepath:  # Only show available files if using output directory
+                available_files = [f for f in os.listdir(OUTPUT_DIR) if f.endswith('.csv')]
+                result = f"File '{filename}' not found. Available CSV files: {', '.join(available_files) if available_files else 'None'}"
+            else:
+                result = f"File not found at path: {file_path}"
+            print(f"❌ read_csv_data: {result}")
+            return result
         
         # Read the CSV file
-        data = pd.read_csv(filepath, index_col=0, parse_dates=True)
+        data = pd.read_csv(file_path, index_col=0, parse_dates=True)
         
         if data.empty:
-            return f"The file '{filename}' is empty."
+            result = f"The file '{filename}' is empty."
+            print(f"⚠️ read_csv_data: {result}")
+            return result
         
         # Calculate comprehensive statistics
         stats = {}
@@ -72,7 +90,7 @@ def read_csv_data(
 - Total Records: {len(data)}
 - Date Range: {data.index[0].strftime('%Y-%m-%d')} to {data.index[-1].strftime('%Y-%m-%d')}
 - Columns: {', '.join(data.columns)}
-- File Size: {os.path.getsize(filepath):,} bytes
+- File Size: {os.path.getsize(file_path):,} bytes
 
 """
         
@@ -104,10 +122,13 @@ def read_csv_data(
 - Volatility Level: {'High' if stats.get('volatility', 0) > 3 else 'Moderate' if stats.get('volatility', 0) > 1 else 'Low'}
 """
         
+        print(f"✅ read_csv_data: Successfully read and analyzed '{filename}' with {len(data)} records")
         return summary
         
     except Exception as e:
-        return f"Error reading CSV file '{filename}': {str(e)}"
+        error_msg = f"Error reading CSV file '{filename}': {str(e)}"
+        print(f"❌ read_csv_data: {error_msg}")
+        return error_msg
 
 
 @tool
@@ -129,6 +150,8 @@ def fetch_yahoo_finance_data(
     Returns:
         String description of the fetched data and file location
     """
+    print(f"🔄 fetch_yahoo_finance_data: Starting to fetch data for {symbol.upper()}...")
+    
     try:
         # Create ticker object
         ticker = yf.Ticker(symbol.upper())
@@ -137,7 +160,9 @@ def fetch_yahoo_finance_data(
         data = ticker.history(period=period, interval=interval)
         
         if data.empty:
-            return f"No data found for symbol {symbol}. Please check if the symbol is correct."
+            result = f"No data found for symbol {symbol}. Please check if the symbol is correct."
+            print(f"❌ fetch_yahoo_finance_data: {result}")
+            return result
         
         # Get basic info about the stock
         try:
@@ -186,10 +211,13 @@ Successfully fetched {company_name} ({symbol.upper()}) stock data:
 The data includes: Open, High, Low, Close, Volume, Dividends, and Stock Splits.
 """
         
+        print(f"✅ fetch_yahoo_finance_data: Successfully fetched and saved data for {symbol.upper()}")
         return summary
         
     except Exception as e:
-        return f"Error fetching data for {symbol}: {str(e)}"
+        error_msg = f"Error fetching data for {symbol}: {str(e)}"
+        print(f"❌ fetch_yahoo_finance_data: {error_msg}")
+        return error_msg
 
 
 
@@ -201,7 +229,9 @@ def get_available_stock_periods_and_intervals() -> str:
     Returns:
         String with available options for periods and intervals
     """
-    return """
+    print("🔄 get_available_stock_periods_and_intervals: Starting to provide period and interval information...")
+    
+    result = """
 📅 AVAILABLE PERIODS:
 - 1d, 5d: Recent days
 - 1mo, 3mo, 6mo: Monthly periods  
@@ -221,6 +251,9 @@ def get_available_stock_periods_and_intervals() -> str:
 
 ⚠️ NOTE: Shorter intervals (minutes) are only available for recent periods (last 60 days).
 """
+    
+    print("✅ get_available_stock_periods_and_intervals: Successfully provided period and interval information")
+    return result
 
 
 
@@ -242,6 +275,8 @@ def visualize_stock_data(
     Returns:
         String description of the created visualization
     """
+    print(f"🔄 visualize_stock_data: Starting to create {chart_type} visualization for {symbol.upper()}...")
+    
     try:
         symbol = symbol.upper()
         
@@ -261,7 +296,9 @@ def visualize_stock_data(
             data_source = f"newly fetched data (period: {period})"
         
         if data.empty:
-            return f"No data available for {symbol} to create visualization."
+            result = f"No data available for {symbol} to create visualization."
+            print(f"❌ visualize_stock_data: {result}")
+            return result
         
         # Create the visualization using Plotly
         if chart_type == "line":
@@ -418,10 +455,13 @@ def visualize_stock_data(
 The interactive visualization includes hover data, zoom capabilities, and can be opened in any web browser.
 """
         
+        print(f"✅ visualize_stock_data: Successfully created {chart_type} visualization for {symbol}")
         return summary
         
     except Exception as e:
-        return f"Error creating visualization for {symbol}: {str(e)}"
+        error_msg = f"Error creating visualization for {symbol}: {str(e)}"
+        print(f"❌ visualize_stock_data: {error_msg}")
+        return error_msg
 
 
 
@@ -433,13 +473,19 @@ def list_saved_stock_files() -> str:
     Returns:
         String listing all available files with details
     """
+    print("🔄 list_saved_stock_files: Starting to list all saved files...")
+    
     try:
         if not os.path.exists(OUTPUT_DIR):
-            return "Output directory does not exist. No files have been saved yet."
+            result = "Output directory does not exist. No files have been saved yet."
+            print(f"⚠️ list_saved_stock_files: {result}")
+            return result
         
         files = os.listdir(OUTPUT_DIR)
         if not files:
-            return "No files found in the output directory."
+            result = "No files found in the output directory."
+            print(f"⚠️ list_saved_stock_files: {result}")
+            return result
         
         data_files = [f for f in files if f.endswith('.csv')]
         chart_files = [f for f in files if f.endswith('.html')]
@@ -476,10 +522,13 @@ def list_saved_stock_files() -> str:
         
         summary += f"📈 TOTAL FILES: {len(files)} ({len(data_files)} data, {len(chart_files)} charts, {len(other_files)} other)"
         
+        print(f"✅ list_saved_stock_files: Successfully listed {len(files)} files")
         return summary
         
     except Exception as e:
-        return f"Error listing files: {str(e)}"
+        error_msg = f"Error listing files: {str(e)}"
+        print(f"❌ list_saved_stock_files: {error_msg}")
+        return error_msg
 
 
 @tool
@@ -500,6 +549,8 @@ def save_text_to_file(
     Returns:
         String description of the saved file and its location
     """
+    print(f"🔄 save_text_to_file: Starting to save content to '{filename}.{file_format}'...")
+    
     try:
         # Clean filename and add timestamp if needed
         clean_filename = filename.replace(" ", "_").replace("/", "_").replace("\\", "_")
@@ -539,10 +590,14 @@ def save_text_to_file(
 
 The file has been saved to the output directory and is ready for use.
 """        
+        
+        print(f"✅ save_text_to_file: Successfully saved '{clean_filename}' ({file_size:,} bytes)")
         return summary
         
     except Exception as e:
-        return f"Error saving file: {str(e)}"
+        error_msg = f"Error saving file: {str(e)}"
+        print(f"❌ save_text_to_file: {error_msg}")
+        return error_msg
     
 
 @tool
@@ -582,6 +637,8 @@ def apply_technical_indicators_and_transformations(
     Returns:
         String description of applied indicators and file location
     """
+    print(f"🔄 apply_technical_indicators_and_transformations: Starting to apply indicators for {symbol.upper()}...")
+    
     try:
         import numpy as np
         
@@ -593,7 +650,9 @@ def apply_technical_indicators_and_transformations(
                 source_file += '.csv'
             filepath = os.path.join(OUTPUT_DIR, source_file)
             if not os.path.exists(filepath):
-                return f"apply_technical_indicators_and_transformations: Source file '{source_file}' not found in output directory."
+                result = f"apply_technical_indicators_and_transformations: Source file '{source_file}' not found in output directory."
+                print(f"❌ apply_technical_indicators_and_transformations: {result}")
+                return result
             data = pd.read_csv(filepath, index_col=0, parse_dates=True)
             data_source = f"file: {source_file}"
         else:
@@ -611,7 +670,9 @@ def apply_technical_indicators_and_transformations(
                 data_source = f"newly fetched data (period: {period})"
         
         if data.empty:
-            return f"apply_technical_indicators_and_transformations: No data available for {symbol}."
+            result = f"apply_technical_indicators_and_transformations: No data available for {symbol}."
+            print(f"❌ apply_technical_indicators_and_transformations: {result}")
+            return result
         
         # Create a copy to avoid modifying original data
         enhanced_data = data.copy()
@@ -795,10 +856,13 @@ def apply_technical_indicators_and_transformations(
 - Can be used directly by stock_analyzer for enhanced charting
 """
         
+        print(f"✅ apply_technical_indicators_and_transformations: Successfully applied {len(applied_indicators)} indicators for {symbol}")
         return summary
         
     except Exception as e:
-        return f"apply_technical_indicators_and_transformations: Error processing {symbol}: {str(e)}"
+        error_msg = f"apply_technical_indicators_and_transformations: Error processing {symbol}: {str(e)}"
+        print(f"❌ apply_technical_indicators_and_transformations: {error_msg}")
+        return error_msg
 
 @tool
 def backtest_model_strategy(
@@ -830,6 +894,8 @@ def backtest_model_strategy(
     Returns:
         String with comprehensive backtesting results and performance metrics
     """
+    print(f"🔄 backtest_model_strategy: Starting backtesting for {symbol.upper()} using {strategy_type} strategy...")
+    
     try:
         symbol = symbol.upper()
         
@@ -840,7 +906,9 @@ def backtest_model_strategy(
         
         if not os.path.exists(model_filepath):
             available_models = [f for f in os.listdir(OUTPUT_DIR) if f.endswith('_model.pkl')]
-            return f"backtest_model_strategy: Model file '{model_file}' not found. Available models: {', '.join(available_models)}"
+            result = f"backtest_model_strategy: Model file '{model_file}' not found. Available models: {', '.join(available_models)}"
+            print(f"❌ backtest_model_strategy: {result}")
+            return result
         
         with open(model_filepath, 'rb') as f:
             model_data = pickle.load(f)
@@ -850,13 +918,15 @@ def backtest_model_strategy(
         feature_cols = model_data['feature_cols']
         target_days = model_data['target_days']
         
-        # Load data
+        # Load data using read_csv_data functionality
         if data_file:
             if not data_file.endswith('.csv'):
                 data_file += '.csv'
             filepath = os.path.join(OUTPUT_DIR, data_file)
             if not os.path.exists(filepath):
-                return f"backtest_model_strategy: Data file '{data_file}' not found."
+                result = f"backtest_model_strategy: Data file '{data_file}' not found."
+                print(f"❌ backtest_model_strategy: {result}")
+                return result
             data = pd.read_csv(filepath, index_col=0, parse_dates=True)
             data_source = f"file: {data_file}"
         else:
@@ -869,18 +939,24 @@ def backtest_model_strategy(
                 data = pd.read_csv(filepath, index_col=0, parse_dates=True)
                 data_source = f"enhanced file: {latest_file}"
             else:
-                return f"backtest_model_strategy: No enhanced data files found for {symbol}."
+                result = f"backtest_model_strategy: No enhanced data files found for {symbol}."
+                print(f"❌ backtest_model_strategy: {result}")
+                return result
         
         # Ensure we have the required features
         missing_features = set(feature_cols) - set(data.columns)
         if missing_features:
-            return f"backtest_model_strategy: Missing required features: {', '.join(missing_features)}"
+            result = f"backtest_model_strategy: Missing required features: {', '.join(missing_features)}"
+            print(f"❌ backtest_model_strategy: {result}")
+            return result
         
         # Prepare data for backtesting
         backtest_data = data[feature_cols + ['Close']].dropna().copy()
         
         if len(backtest_data) < 50:
-            return f"backtest_model_strategy: Insufficient data for backtesting. Only {len(backtest_data)} records available."
+            result = f"backtest_model_strategy: Insufficient data for backtesting. Only {len(backtest_data)} records available."
+            print(f"❌ backtest_model_strategy: {result}")
+            return result
         
         # Make predictions
         X = backtest_data[feature_cols]
@@ -1116,10 +1192,13 @@ def backtest_model_strategy(
 - This is for analysis purposes only, not investment advice
 """
         
+        print(f"✅ backtest_model_strategy: Successfully completed backtesting for {symbol} ({total_trades} trades, {total_return:.2f}% return)")
         return summary
         
     except Exception as e:
-        return f"backtest_model_strategy: Error running backtest for {symbol}: {str(e)}"
+        error_msg = f"backtest_model_strategy: Error running backtest for {symbol}: {str(e)}"
+        print(f"❌ backtest_model_strategy: {error_msg}")
+        return error_msg
     
 
 # Add these imports to the top of tools.py
@@ -1160,7 +1239,11 @@ def train_xgboost_price_predictor(
     Returns:
         String with model performance metrics and file locations
     """
+    print(f"🔄 train_xgboost_price_predictor: Starting XGBoost training for {symbol.upper()}...")
+    
     try:
+        import numpy as np
+        
         symbol = symbol.upper()
         
         # Load enhanced data with technical indicators
@@ -1169,7 +1252,9 @@ def train_xgboost_price_predictor(
                 source_file += '.csv'
             filepath = os.path.join(OUTPUT_DIR, source_file)
             if not os.path.exists(filepath):
-                return f"train_xgboost_price_predictor: Source file '{source_file}' not found."
+                result = f"train_xgboost_price_predictor: Source file '{source_file}' not found."
+                print(f"❌ train_xgboost_price_predictor: {result}")
+                return result
             data = pd.read_csv(filepath, index_col=0, parse_dates=True)
             data_source = f"file: {source_file}"
         else:
@@ -1182,10 +1267,14 @@ def train_xgboost_price_predictor(
                 data = pd.read_csv(filepath, index_col=0, parse_dates=True)
                 data_source = f"enhanced file: {latest_file}"
             else:
-                return f"train_xgboost_price_predictor: No enhanced data files found for {symbol}. Please run technical indicators first."
+                result = f"train_xgboost_price_predictor: No enhanced data files found for {symbol}. Please run technical indicators first."
+                print(f"❌ train_xgboost_price_predictor: {result}")
+                return result
         
         if data.empty or len(data) < 50:
-            return f"train_xgboost_price_predictor: Insufficient data for {symbol}. Need at least 50 records."
+            result = f"train_xgboost_price_predictor: Insufficient data for {symbol}. Need at least 50 records."
+            print(f"❌ train_xgboost_price_predictor: {result}")
+            return result
         
         # Prepare features and target
         # Target: future price (shifted by target_days)
@@ -1196,13 +1285,17 @@ def train_xgboost_price_predictor(
         feature_cols = [col for col in data.columns if col not in exclude_cols and not data[col].isnull().all()]
         
         if len(feature_cols) < 3:
-            return f"train_xgboost_price_predictor: Insufficient technical indicators. Found only {len(feature_cols)} features. Need at least 3."
+            result = f"train_xgboost_price_predictor: Insufficient technical indicators. Found only {len(feature_cols)} features. Need at least 3."
+            print(f"❌ train_xgboost_price_predictor: {result}")
+            return result
         
         # Remove rows with NaN values
         model_data = data[feature_cols + ['Target']].dropna()
         
         if len(model_data) < 30:
-            return f"train_xgboost_price_predictor: Insufficient clean data after removing NaN values. Only {len(model_data)} records available."
+            result = f"train_xgboost_price_predictor: Insufficient clean data after removing NaN values. Only {len(model_data)} records available."
+            print(f"❌ train_xgboost_price_predictor: {result}")
+            return result
         
         X = model_data[feature_cols]
         y = model_data['Target']
@@ -1352,10 +1445,13 @@ def train_xgboost_price_predictor(
 - Prediction Accuracy: ±${test_mae:.2f} average error on test set
 """
         
+        print(f"✅ train_xgboost_price_predictor: Successfully trained XGBoost model for {symbol} (R²: {test_r2:.3f})")
         return summary
         
     except Exception as e:
-        return f"train_xgboost_price_predictor: Error training model for {symbol}: {str(e)}"
+        error_msg = f"train_xgboost_price_predictor: Error training model for {symbol}: {str(e)}"
+        print(f"❌ train_xgboost_price_predictor: {error_msg}")
+        return error_msg
 
 
 @tool
@@ -1385,16 +1481,20 @@ def train_random_forest_price_predictor(
     Returns:
         String with model performance metrics and file locations
     """
+    print(f"🔄 train_random_forest_price_predictor: Starting Random Forest training for {symbol.upper()}...")
+    
     try:
         symbol = symbol.upper()
         
-        # Load enhanced data with technical indicators
+        # Load enhanced data with technical indicators using read_csv_data functionality
         if source_file:
             if not source_file.endswith('.csv'):
                 source_file += '.csv'
             filepath = os.path.join(OUTPUT_DIR, source_file)
             if not os.path.exists(filepath):
-                return f"train_random_forest_price_predictor: Source file '{source_file}' not found."
+                result = f"train_random_forest_price_predictor: Source file '{source_file}' not found."
+                print(f"❌ train_random_forest_price_predictor: {result}")
+                return result
             data = pd.read_csv(filepath, index_col=0, parse_dates=True)
             data_source = f"file: {source_file}"
         else:
@@ -1407,10 +1507,14 @@ def train_random_forest_price_predictor(
                 data = pd.read_csv(filepath, index_col=0, parse_dates=True)
                 data_source = f"enhanced file: {latest_file}"
             else:
-                return f"train_random_forest_price_predictor: No enhanced data files found for {symbol}. Please run technical indicators first."
+                result = f"train_random_forest_price_predictor: No enhanced data files found for {symbol}. Please run technical indicators first."
+                print(f"❌ train_random_forest_price_predictor: {result}")
+                return result
         
         if data.empty or len(data) < 50:
-            return f"train_random_forest_price_predictor: Insufficient data for {symbol}. Need at least 50 records."
+            result = f"train_random_forest_price_predictor: Insufficient data for {symbol}. Need at least 50 records."
+            print(f"❌ train_random_forest_price_predictor: {result}")
+            return result
         
         # Prepare features and target
         data['Target'] = data['Close'].shift(-target_days)
@@ -1420,13 +1524,17 @@ def train_random_forest_price_predictor(
         feature_cols = [col for col in data.columns if col not in exclude_cols and not data[col].isnull().all()]
         
         if len(feature_cols) < 3:
-            return f"train_random_forest_price_predictor: Insufficient technical indicators. Found only {len(feature_cols)} features."
+            result = f"train_random_forest_price_predictor: Insufficient technical indicators. Found only {len(feature_cols)} features."
+            print(f"❌ train_random_forest_price_predictor: {result}")
+            return result
         
         # Remove rows with NaN values
         model_data = data[feature_cols + ['Target']].dropna()
         
         if len(model_data) < 30:
-            return f"train_random_forest_price_predictor: Insufficient clean data. Only {len(model_data)} records available."
+            result = f"train_random_forest_price_predictor: Insufficient clean data. Only {len(model_data)} records available."
+            print(f"❌ train_random_forest_price_predictor: {result}")
+            return result
         
         X = model_data[feature_cols]
         y = model_data['Target']
@@ -1577,10 +1685,13 @@ def train_random_forest_price_predictor(
 - Model Stability: {'High' if np.std(cv_scores) < 0.1 else 'Moderate' if np.std(cv_scores) < 0.2 else 'Low'}
 """
         
+        print(f"✅ train_random_forest_price_predictor: Successfully trained Random Forest model for {symbol} (R²: {test_r2:.3f})")
         return summary
         
     except Exception as e:
-        return f"train_random_forest_price_predictor: Error training model for {symbol}: {str(e)}"
+        error_msg = f"train_random_forest_price_predictor: Error training model for {symbol}: {str(e)}"
+        print(f"❌ train_random_forest_price_predictor: {error_msg}")
+        return error_msg
     
 
 @tool
@@ -1598,19 +1709,27 @@ def debug_file_system(
     Returns:
         String with detailed file system information
     """
+    print(f"🔄 debug_file_system: Starting file system analysis{' for ' + symbol.upper() if symbol else ''}...")
+    
     try:
         # Check if output directory exists
         if not os.path.exists(OUTPUT_DIR):
-            return f"debug_file_system: Output directory '{OUTPUT_DIR}' does not exist. Creating it now..."
+            result = f"debug_file_system: Output directory '{OUTPUT_DIR}' does not exist. Creating it now..."
+            print(f"⚠️ debug_file_system: {result}")
+            return result
         
         # Get all files in output directory
         try:
             all_files = os.listdir(OUTPUT_DIR)
         except Exception as e:
-            return f"debug_file_system: Error reading output directory: {str(e)}"
+            result = f"debug_file_system: Error reading output directory: {str(e)}"
+            print(f"❌ debug_file_system: {result}")
+            return result
         
         if not all_files:
-            return f"debug_file_system: Output directory '{OUTPUT_DIR}' is empty. No files found."
+            result = f"debug_file_system: Output directory '{OUTPUT_DIR}' is empty. No files found."
+            print(f"⚠️ debug_file_system: {result}")
+            return result
         
         # Categorize files
         csv_files = [f for f in all_files if f.endswith('.csv')]
@@ -1744,7 +1863,10 @@ def debug_file_system(
         report += f"- Directory Writable: {os.access(OUTPUT_DIR, os.W_OK) if os.path.exists(OUTPUT_DIR) else 'N/A'}\n"
         report += f"- Current Working Directory: {os.getcwd()}\n"
         
+        print(f"✅ debug_file_system: Analysis completed - found {len(all_files)} files total")
         return report
         
     except Exception as e:
-        return f"debug_file_system: Error during analysis: {str(e)}"
+        error_msg = f"debug_file_system: Error during analysis: {str(e)}"
+        print(f"❌ debug_file_system: {error_msg}")
+        return error_msg
