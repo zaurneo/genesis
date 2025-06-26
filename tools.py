@@ -2524,3 +2524,522 @@ def generate_comprehensive_html_report(
         error_msg = f"generate_comprehensive_html_report: Error generating report for {symbol}: {str(e)}"
         print(f"❌ generate_comprehensive_html_report: {error_msg}")
         return error_msg
+    
+
+# Add this new function to tools.py, after the existing visualization functions
+
+@tool
+def visualize_backtesting_results(
+    symbol: str,
+    chart_type: Literal["portfolio_performance", "trading_signals", "model_predictions", "combined"] = "combined",
+    backtest_files: Optional[str] = None,
+    include_benchmark: bool = True,
+    save_chart: bool = True
+) -> str:
+    """
+    Create comprehensive visualizations of backtesting results showing model performance,
+    trading signals, and portfolio value compared to actual stock data and benchmarks.
+    
+    Args:
+        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
+        chart_type: Type of visualization:
+                   - "portfolio_performance": Portfolio value vs benchmark over time
+                   - "trading_signals": Stock price with buy/sell signals
+                   - "model_predictions": Model predictions vs actual prices
+                   - "combined": All visualizations in subplots
+        backtest_files: Specific backtest result files to visualize (comma-separated)
+        include_benchmark: Whether to include buy-and-hold benchmark comparison
+        save_chart: Whether to save the interactive chart as HTML file
+        
+    Returns:
+        String description of the created visualization and insights
+    """
+    print(f"[DEBUG] [visualize_backtesting_results] Starting backtesting visualization for {symbol.upper()}...")
+    
+    try:
+        symbol = symbol.upper()
+        
+        # Find all backtesting result files for this symbol
+        available_files = os.listdir(OUTPUT_DIR) if os.path.exists(OUTPUT_DIR) else []
+        
+        if backtest_files:
+            # Use specified files
+            specified_files = [f.strip() for f in backtest_files.split(',')]
+            backtest_result_files = []
+            for file in specified_files:
+                if not file.endswith('.json'):
+                    file += '.json'
+                if file in available_files and symbol in file.upper() and 'backtest' in file:
+                    backtest_result_files.append(file)
+        else:
+            # Find all backtest files for this symbol
+            backtest_result_files = [f for f in available_files if 
+                                   f.endswith('.json') and symbol in f.upper() and 'backtest' in f]
+        
+        if not backtest_result_files:
+            result = f"[DEBUG] [visualize_backtesting_results] No backtesting result files found for {symbol}."
+            print(result)
+            return result
+        
+        print(f"[DEBUG] [visualize_backtesting_results] Found {len(backtest_result_files)} backtest files for {symbol}")
+        
+        # Load backtesting results and portfolio data
+        all_backtest_data = {}
+        portfolio_data = {}
+        
+        for result_file in backtest_result_files:
+            try:
+                # Load backtest results
+                result_path = os.path.join(OUTPUT_DIR, result_file)
+                with open(result_path, 'r') as f:
+                    backtest_results = json.load(f)
+                
+                # Find corresponding portfolio CSV file
+                portfolio_file = result_file.replace('_results_', '_portfolio_').replace('.json', '.csv')
+                portfolio_path = os.path.join(OUTPUT_DIR, portfolio_file)
+                
+                if os.path.exists(portfolio_path):
+                    portfolio_df = pd.read_csv(portfolio_path, index_col=0, parse_dates=True)
+                    
+                    # Store data with strategy type as key
+                    strategy_key = f"{backtest_results.get('strategy_type', 'unknown')}_{backtest_results.get('model_file', 'model')}"
+                    all_backtest_data[strategy_key] = backtest_results
+                    portfolio_data[strategy_key] = portfolio_df
+                    
+                    print(f"[DEBUG] [visualize_backtesting_results] Loaded data for strategy: {strategy_key}")
+                else:
+                    print(f"[DEBUG] [visualize_backtesting_results] Portfolio file not found: {portfolio_file}")
+                    
+            except Exception as e:
+                print(f"[DEBUG] [visualize_backtesting_results] Error loading {result_file}: {str(e)}")
+                continue
+        
+        if not all_backtest_data:
+            result = f"[DEBUG] [visualize_backtesting_results] No valid backtesting data could be loaded for {symbol}."
+            print(result)
+            return result
+        
+        # Create visualizations based on chart_type
+        if chart_type == "portfolio_performance":
+            fig = create_portfolio_performance_chart(symbol, all_backtest_data, portfolio_data, include_benchmark)
+        elif chart_type == "trading_signals":
+            fig = create_trading_signals_chart(symbol, all_backtest_data, portfolio_data)
+        elif chart_type == "model_predictions":
+            fig = create_model_predictions_chart(symbol, all_backtest_data, portfolio_data)
+        elif chart_type == "combined":
+            fig = create_combined_backtesting_chart(symbol, all_backtest_data, portfolio_data, include_benchmark)
+        else:
+            result = f"[DEBUG] [visualize_backtesting_results] Unknown chart type: {chart_type}"
+            print(result)
+            return result
+        
+        # Save chart if requested
+        chart_filename = None
+        if save_chart:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            chart_filename = f"visualize_backtesting_results_{symbol}_{chart_type}_chart_{timestamp}.html"
+            chart_filepath = os.path.join(OUTPUT_DIR, chart_filename)
+            
+            plot(fig, filename=chart_filepath, auto_open=False, include_plotlyjs=True)
+            file_size = os.path.getsize(chart_filepath)
+            print(f"[DEBUG] [visualize_backtesting_results] Saved chart: {chart_filename} ({file_size:,} bytes)")
+        
+        # Calculate summary statistics
+        performance_summary = {}
+        for strategy_key, backtest_data in all_backtest_data.items():
+            performance_summary[strategy_key] = {
+                'total_return': backtest_data['performance']['total_return_pct'],
+                'sharpe_ratio': backtest_data['performance']['sharpe_ratio'],
+                'max_drawdown': backtest_data['performance']['max_drawdown_pct'],
+                'total_trades': backtest_data['performance']['total_trades']
+            }
+        
+        # Find best performing strategy
+        best_strategy = max(performance_summary.keys(), 
+                          key=lambda x: performance_summary[x]['total_return'])
+        
+        summary = f"""[DEBUG] [visualize_backtesting_results] Successfully created backtesting visualization for {symbol}:
+
+🎯 BACKTESTING VISUALIZATION SUMMARY:
+- Symbol: {symbol}
+- Chart Type: {chart_type.replace('_', ' ').title()}
+- Strategies Analyzed: {len(all_backtest_data)}
+- Benchmark Included: {'Yes' if include_benchmark else 'No'}
+
+📊 STRATEGIES COMPARED:
+{chr(10).join([f"  • {strategy}: {data['total_return']:.2f}% return, {data['sharpe_ratio']:.2f} Sharpe, {data['total_trades']} trades" 
+               for strategy, data in performance_summary.items()])}
+
+🏆 BEST PERFORMING STRATEGY:
+- Strategy: {best_strategy}
+- Total Return: {performance_summary[best_strategy]['total_return']:.2f}%
+- Sharpe Ratio: {performance_summary[best_strategy]['sharpe_ratio']:.2f}
+- Max Drawdown: {performance_summary[best_strategy]['max_drawdown']:.2f}%
+
+📈 VISUALIZATION FEATURES:
+- Interactive Plotly charts with zoom/pan capabilities
+- Multiple strategy performance comparison
+- Trading signals overlaid on price data
+- Portfolio value evolution over time
+- Model predictions vs actual prices
+- Benchmark comparison (if enabled)
+
+📁 CHART SAVED: {chart_filename if chart_filename else 'Not saved'}
+- Location: {os.path.join(OUTPUT_DIR, chart_filename) if chart_filename else 'N/A'}
+- Format: Interactive HTML with embedded JavaScript
+
+💡 KEY INSIGHTS:
+- Strategy Count: {len(performance_summary)} backtesting strategies analyzed
+- Performance Range: {min(data['total_return'] for data in performance_summary.values()):.2f}% to {max(data['total_return'] for data in performance_summary.values()):.2f}%
+- Best Risk-Adjusted: {max(performance_summary.keys(), key=lambda x: performance_summary[x]['sharpe_ratio'])} (Sharpe: {max(data['sharpe_ratio'] for data in performance_summary.values()):.2f})
+- Most Active: {max(performance_summary.keys(), key=lambda x: performance_summary[x]['total_trades'])} ({max(data['total_trades'] for data in performance_summary.values())} trades)
+
+The interactive visualization allows detailed analysis of model performance, trading patterns, and risk-return characteristics across all backtested strategies.
+"""
+        
+        print(f"[DEBUG] [visualize_backtesting_results] Completed successfully for {symbol}")
+        return summary
+        
+    except Exception as e:
+        error_msg = f"[DEBUG] [visualize_backtesting_results] Error creating visualization for {symbol}: {str(e)}"
+        print(error_msg)
+        return error_msg
+
+
+def create_portfolio_performance_chart(symbol, all_backtest_data, portfolio_data, include_benchmark):
+    """Create portfolio performance comparison chart."""
+    fig = go.Figure()
+    
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+    color_idx = 0
+    
+    for strategy_key, portfolio_df in portfolio_data.items():
+        # Calculate cumulative returns
+        initial_value = portfolio_df['portfolio_value'].iloc[0]
+        cumulative_returns = (portfolio_df['portfolio_value'] / initial_value - 1) * 100
+        
+        fig.add_trace(go.Scatter(
+            x=portfolio_df.index,
+            y=cumulative_returns,
+            mode='lines',
+            name=f'{strategy_key} Strategy',
+            line=dict(color=colors[color_idx % len(colors)], width=2),
+            hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Return: %{y:.2f}%<extra></extra>'
+        ))
+        color_idx += 1
+        
+        # Add buy and hold benchmark if available and requested
+        if include_benchmark and 'buy_hold_cumulative' in portfolio_df.columns:
+            benchmark_returns = portfolio_df['buy_hold_cumulative'] * 100
+            fig.add_trace(go.Scatter(
+                x=portfolio_df.index,
+                y=benchmark_returns,
+                mode='lines',
+                name='Buy & Hold Benchmark',
+                line=dict(color='gray', width=2, dash='dash'),
+                hovertemplate='<b>Buy & Hold</b><br>Date: %{x}<br>Return: %{y:.2f}%<extra></extra>'
+            ))
+            include_benchmark = False  # Only add benchmark once
+    
+    fig.update_layout(
+        title=f'{symbol} Portfolio Performance Comparison',
+        xaxis_title='Date',
+        yaxis_title='Cumulative Return (%)',
+        template='plotly_white',
+        hovermode='x unified',
+        width=1200,
+        height=600,
+        legend=dict(x=0.02, y=0.98, bgcolor='rgba(255,255,255,0.8)')
+    )
+    
+    return fig
+
+
+def create_trading_signals_chart(symbol, all_backtest_data, portfolio_data):
+    """Create trading signals overlaid on price chart."""
+    fig = sp.make_subplots(
+        rows=len(portfolio_data), cols=1,
+        subplot_titles=[f'{strategy} Trading Signals' for strategy in portfolio_data.keys()],
+        vertical_spacing=0.1
+    )
+    
+    row = 1
+    for strategy_key, portfolio_df in portfolio_data.items():
+        # Price line
+        fig.add_trace(go.Scatter(
+            x=portfolio_df.index,
+            y=portfolio_df['price'],
+            mode='lines',
+            name=f'{strategy_key} Price',
+            line=dict(color='blue', width=1),
+            showlegend=(row == 1)
+        ), row=row, col=1)
+        
+        # Buy signals (signal = 1)
+        buy_signals = portfolio_df[portfolio_df['signal'] == 1]
+        if not buy_signals.empty:
+            fig.add_trace(go.Scatter(
+                x=buy_signals.index,
+                y=buy_signals['price'],
+                mode='markers',
+                name='Buy Signal',
+                marker=dict(color='green', size=10, symbol='triangle-up'),
+                showlegend=(row == 1)
+            ), row=row, col=1)
+        
+        # Sell signals (signal = -1)
+        sell_signals = portfolio_df[portfolio_df['signal'] == -1]
+        if not sell_signals.empty:
+            fig.add_trace(go.Scatter(
+                x=sell_signals.index,
+                y=sell_signals['price'],
+                mode='markers',
+                name='Sell Signal',
+                marker=dict(color='red', size=10, symbol='triangle-down'),
+                showlegend=(row == 1)
+            ), row=row, col=1)
+        
+        row += 1
+    
+    fig.update_layout(
+        title=f'{symbol} Trading Signals Analysis',
+        template='plotly_white',
+        width=1200,
+        height=400 * len(portfolio_data),
+        hovermode='x unified'
+    )
+    
+    # Update y-axis titles
+    for i in range(len(portfolio_data)):
+        fig.update_yaxes(title_text='Price ($)', row=i+1, col=1)
+    
+    return fig
+
+
+def create_model_predictions_chart(symbol, all_backtest_data, portfolio_data):
+    """Create model predictions vs actual prices chart."""
+    fig = go.Figure()
+    
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+    color_idx = 0
+    
+    # Get actual price data (use first portfolio data as reference)
+    first_portfolio = list(portfolio_data.values())[0]
+    fig.add_trace(go.Scatter(
+        x=first_portfolio.index,
+        y=first_portfolio['price'],
+        mode='lines',
+        name='Actual Price',
+        line=dict(color='black', width=2),
+        hovertemplate='<b>Actual Price</b><br>Date: %{x}<br>Price: $%{y:.2f}<extra></extra>'
+    ))
+    
+    # Add model predictions (if available in backtest data)
+    for strategy_key in all_backtest_data.keys():
+        # Try to find corresponding enhanced data file with predictions
+        enhanced_files = [f for f in os.listdir(OUTPUT_DIR) if 
+                         f.startswith(f"apply_technical_indicators_and_transformations_{symbol}_") and f.endswith('.csv')]
+        
+        if enhanced_files:
+            # Use most recent enhanced file
+            latest_enhanced = max(enhanced_files, key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
+            enhanced_path = os.path.join(OUTPUT_DIR, latest_enhanced)
+            
+            try:
+                enhanced_data = pd.read_csv(enhanced_path, index_col=0, parse_dates=True)
+                
+                # If we have prediction data, add it
+                if 'Predicted_Price' in enhanced_data.columns:
+                    # Align with portfolio data timeframe
+                    portfolio_df = portfolio_data[strategy_key]
+                    common_dates = enhanced_data.index.intersection(portfolio_df.index)
+                    
+                    if not common_dates.empty:
+                        aligned_predictions = enhanced_data.loc[common_dates, 'Predicted_Price']
+                        
+                        fig.add_trace(go.Scatter(
+                            x=common_dates,
+                            y=aligned_predictions,
+                            mode='lines',
+                            name=f'{strategy_key} Predictions',
+                            line=dict(color=colors[color_idx % len(colors)], width=1, dash='dot'),
+                            opacity=0.7,
+                            hovertemplate=f'<b>{strategy_key} Prediction</b><br>Date: %{{x}}<br>Price: $%{{y:.2f}}<extra></extra>'
+                        ))
+                        color_idx += 1
+            except Exception as e:
+                print(f"[DEBUG] [create_model_predictions_chart] Could not load predictions for {strategy_key}: {e}")
+                continue
+    
+    fig.update_layout(
+        title=f'{symbol} Model Predictions vs Actual Prices',
+        xaxis_title='Date',
+        yaxis_title='Price ($)',
+        template='plotly_white',
+        hovermode='x unified',
+        width=1200,
+        height=600,
+        legend=dict(x=0.02, y=0.98, bgcolor='rgba(255,255,255,0.8)')
+    )
+    
+    return fig
+
+
+def create_combined_backtesting_chart(symbol, all_backtest_data, portfolio_data, include_benchmark):
+    """Create combined chart with all backtesting visualizations."""
+    # Calculate the number of subplots needed
+    n_strategies = len(portfolio_data)
+    n_rows = 3  # Portfolio performance, signals, predictions
+    
+    subplot_titles = [
+        f'{symbol} Portfolio Performance Comparison',
+        f'{symbol} Trading Signals (All Strategies)',
+        f'{symbol} Model Predictions vs Actual Prices'
+    ]
+    
+    fig = sp.make_subplots(
+        rows=n_rows, cols=1,
+        subplot_titles=subplot_titles,
+        vertical_spacing=0.08,
+        row_heights=[0.4, 0.35, 0.25]
+    )
+    
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+    
+    # 1. Portfolio Performance (Row 1)
+    color_idx = 0
+    for strategy_key, portfolio_df in portfolio_data.items():
+        initial_value = portfolio_df['portfolio_value'].iloc[0]
+        cumulative_returns = (portfolio_df['portfolio_value'] / initial_value - 1) * 100
+        
+        fig.add_trace(go.Scatter(
+            x=portfolio_df.index,
+            y=cumulative_returns,
+            mode='lines',
+            name=f'{strategy_key}',
+            line=dict(color=colors[color_idx % len(colors)], width=2),
+            legendgroup='strategies',
+            hovertemplate=f'<b>{strategy_key}</b><br>Date: %{{x}}<br>Return: %{{y:.2f}}%<extra></extra>'
+        ), row=1, col=1)
+        color_idx += 1
+    
+    # Add benchmark if requested
+    if include_benchmark and portfolio_data:
+        first_portfolio = list(portfolio_data.values())[0]
+        if 'buy_hold_cumulative' in first_portfolio.columns:
+            benchmark_returns = first_portfolio['buy_hold_cumulative'] * 100
+            fig.add_trace(go.Scatter(
+                x=first_portfolio.index,
+                y=benchmark_returns,
+                mode='lines',
+                name='Buy & Hold',
+                line=dict(color='gray', width=2, dash='dash'),
+                legendgroup='benchmark',
+                hovertemplate='<b>Buy & Hold</b><br>Date: %{x}<br>Return: %{y:.2f}%<extra></extra>'
+            ), row=1, col=1)
+    
+    # 2. Trading Signals (Row 2) - Combined view
+    first_portfolio = list(portfolio_data.values())[0]
+    
+    # Price line
+    fig.add_trace(go.Scatter(
+        x=first_portfolio.index,
+        y=first_portfolio['price'],
+        mode='lines',
+        name='Price',
+        line=dict(color='black', width=1),
+        legendgroup='price',
+        showlegend=True
+    ), row=2, col=1)
+    
+    # Combine all signals
+    all_buy_dates = []
+    all_buy_prices = []
+    all_sell_dates = []
+    all_sell_prices = []
+    
+    for strategy_key, portfolio_df in portfolio_data.items():
+        buy_signals = portfolio_df[portfolio_df['signal'] == 1]
+        sell_signals = portfolio_df[portfolio_df['signal'] == -1]
+        
+        all_buy_dates.extend(buy_signals.index)
+        all_buy_prices.extend(buy_signals['price'])
+        all_sell_dates.extend(sell_signals.index)
+        all_sell_prices.extend(sell_signals['price'])
+    
+    if all_buy_dates:
+        fig.add_trace(go.Scatter(
+            x=all_buy_dates,
+            y=all_buy_prices,
+            mode='markers',
+            name='Buy Signals',
+            marker=dict(color='green', size=8, symbol='triangle-up'),
+            legendgroup='signals'
+        ), row=2, col=1)
+    
+    if all_sell_dates:
+        fig.add_trace(go.Scatter(
+            x=all_sell_dates,
+            y=all_sell_prices,
+            mode='markers',
+            name='Sell Signals',
+            marker=dict(color='red', size=8, symbol='triangle-down'),
+            legendgroup='signals'
+        ), row=2, col=1)
+    
+    # 3. Model Predictions (Row 3)
+    fig.add_trace(go.Scatter(
+        x=first_portfolio.index,
+        y=first_portfolio['price'],
+        mode='lines',
+        name='Actual Price',
+        line=dict(color='black', width=2),
+        legendgroup='actual',
+        showlegend=False  # Already shown above
+    ), row=3, col=1)
+    
+    # Add predictions if available
+    enhanced_files = [f for f in os.listdir(OUTPUT_DIR) if 
+                     f.startswith(f"apply_technical_indicators_and_transformations_{symbol}_") and f.endswith('.csv')]
+    
+    if enhanced_files:
+        latest_enhanced = max(enhanced_files, key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
+        enhanced_path = os.path.join(OUTPUT_DIR, latest_enhanced)
+        
+        try:
+            enhanced_data = pd.read_csv(enhanced_path, index_col=0, parse_dates=True)
+            
+            if 'Predicted_Price' in enhanced_data.columns:
+                common_dates = enhanced_data.index.intersection(first_portfolio.index)
+                if not common_dates.empty:
+                    aligned_predictions = enhanced_data.loc[common_dates, 'Predicted_Price']
+                    
+                    fig.add_trace(go.Scatter(
+                        x=common_dates,
+                        y=aligned_predictions,
+                        mode='lines',
+                        name='Model Predictions',
+                        line=dict(color='orange', width=1, dash='dot'),
+                        opacity=0.7,
+                        legendgroup='predictions'
+                    ), row=3, col=1)
+        except Exception as e:
+            print(f"[DEBUG] [create_combined_backtesting_chart] Could not load predictions: {e}")
+    
+    # Update layout
+    fig.update_layout(
+        title=f'{symbol} Comprehensive Backtesting Analysis',
+        template='plotly_white',
+        hovermode='x unified',
+        width=1200,
+        height=1200,
+        legend=dict(x=1.02, y=1, bgcolor='rgba(255,255,255,0.8)')
+    )
+    
+    # Update axis labels
+    fig.update_yaxes(title_text='Cumulative Return (%)', row=1, col=1)
+    fig.update_yaxes(title_text='Price ($)', row=2, col=1)
+    fig.update_yaxes(title_text='Price ($)', row=3, col=1)
+    fig.update_xaxes(title_text='Date', row=3, col=1)
+    
+    return fig

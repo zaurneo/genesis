@@ -13,7 +13,8 @@ from tools import (
     train_xgboost_price_predictor,  # NEW: Add these imports
     train_random_forest_price_predictor,  # NEW
     backtest_model_strategy,  # NEW
-    generate_comprehensive_html_report
+    generate_comprehensive_html_report,
+    visualize_backtesting_results  # NEW: Add backtesting visualization tool
 )
 
 model_gpt = model_gpt_4_1
@@ -83,6 +84,7 @@ stock_reporter_tools = [
     read_csv_data,
     save_text_to_file,
     visualize_stock_data,
+    visualize_backtesting_results,  # NEW: Add backtesting visualization tool
     generate_comprehensive_html_report
 ]
 
