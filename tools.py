@@ -1870,3 +1870,657 @@ def debug_file_system(
         error_msg = f"debug_file_system: Error during analysis: {str(e)}"
         print(f"❌ debug_file_system: {error_msg}")
         return error_msg
+    
+
+
+
+# Add this tool to tools.py
+
+@tool
+def generate_comprehensive_html_report(
+    symbol: str,
+    report_title: Optional[str] = None,
+    include_charts: bool = True,
+    include_model_results: bool = True,
+    include_backtest_results: bool = True,
+    custom_analysis: Optional[str] = None,
+    save_report: bool = True
+) -> str:
+    """
+    Generate a comprehensive HTML report with all analysis, charts, and results.
+    Creates a professional, interactive HTML document with embedded charts and detailed analysis.
+    
+    Args:
+        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
+        report_title: Custom title for the report (if None, auto-generates)
+        include_charts: Whether to embed interactive charts in the report
+        include_model_results: Whether to include ML model performance results
+        include_backtest_results: Whether to include backtesting analysis
+        custom_analysis: Additional custom analysis text to include
+        save_report: Whether to save the HTML report to file
+        
+    Returns:
+        String description of the generated report and its location
+    """
+    print(f"🔄 generate_comprehensive_html_report: Starting comprehensive HTML report generation for {symbol.upper()}...")
+    
+    try:
+        symbol = symbol.upper()
+        
+        # Default report title
+        if not report_title:
+            report_title = f"{symbol} Stock Analysis Report"
+        
+        # Get current timestamp
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        file_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Collect all available files
+        available_files = os.listdir(OUTPUT_DIR) if os.path.exists(OUTPUT_DIR) else []
+        
+        # Filter files by symbol
+        symbol_files = {
+            'data_files': [f for f in available_files if f.endswith('.csv') and symbol in f.upper()],
+            'chart_files': [f for f in available_files if f.endswith('.html') and symbol in f.upper()],
+            'model_files': [f for f in available_files if f.endswith('.pkl') and symbol in f.upper()],
+            'result_files': [f for f in available_files if f.endswith('.json') and symbol in f.upper()]
+        }
+        
+        # Start building HTML report
+        html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{report_title}</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }}
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }}
+        .header {{
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #007acc;
+        }}
+        .header h1 {{
+            color: #007acc;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }}
+        .header .subtitle {{
+            color: #666;
+            font-size: 1.2em;
+        }}
+        .section {{
+            margin: 30px 0;
+            padding: 20px;
+            border-left: 4px solid #007acc;
+            background-color: #f9f9f9;
+        }}
+        .section h2 {{
+            color: #005580;
+            margin-top: 0;
+            font-size: 1.8em;
+        }}
+        .section h3 {{
+            color: #007acc;
+            font-size: 1.3em;
+            margin-top: 25px;
+        }}
+        .metrics-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }}
+        .metric-card {{
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-left: 4px solid #28a745;
+        }}
+        .metric-card.negative {{
+            border-left-color: #dc3545;
+        }}
+        .metric-card h4 {{
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }}
+        .metric-card .value {{
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #007acc;
+        }}
+        .chart-container {{
+            margin: 30px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }}
+        .chart-title {{
+            font-size: 1.4em;
+            color: #005580;
+            margin-bottom: 15px;
+            text-align: center;
+        }}
+        .data-table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }}
+        .data-table th, .data-table td {{
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }}
+        .data-table th {{
+            background-color: #007acc;
+            color: white;
+            font-weight: bold;
+        }}
+        .data-table tr:nth-child(even) {{
+            background-color: #f9f9f9;
+        }}
+        .file-list {{
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            margin: 15px 0;
+        }}
+        .file-list ul {{
+            margin: 0;
+            padding-left: 20px;
+        }}
+        .file-list li {{
+            margin: 5px 0;
+            color: #666;
+        }}
+        .analysis-text {{
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            line-height: 1.8;
+        }}
+        .footer {{
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 2px solid #eee;
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+        }}
+        .warning {{
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #856404;
+        }}
+        .success {{
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #155724;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{report_title}</h1>
+            <div class="subtitle">Comprehensive Stock Analysis Report</div>
+            <div class="subtitle">Generated on {timestamp}</div>
+        </div>
+"""
+
+        # Executive Summary Section
+        html_content += f"""
+        <div class="section">
+            <h2>📈 Executive Summary</h2>
+            <p>This comprehensive analysis report for <strong>{symbol}</strong> includes stock data analysis, 
+            technical indicators, machine learning predictions, and backtesting results. The report combines 
+            multiple data sources and analytical methods to provide actionable insights.</p>
+        </div>
+"""
+
+        # Stock Data Analysis Section
+        if symbol_files['data_files']:
+            html_content += f"""
+        <div class="section">
+            <h2>📊 Stock Data Analysis</h2>
+"""
+            
+            # Find the most recent data file and analyze it
+            latest_data_file = max(symbol_files['data_files'], 
+                                 key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
+            
+            try:
+                # Read the latest data file
+                filepath = os.path.join(OUTPUT_DIR, latest_data_file)
+                data = pd.read_csv(filepath, index_col=0, parse_dates=True)
+                
+                if not data.empty:
+                    # Calculate key metrics
+                    current_price = data['Close'].iloc[-1]
+                    opening_price = data['Close'].iloc[0]
+                    price_change = current_price - opening_price
+                    price_change_pct = (price_change / opening_price * 100)
+                    period_high = data['High'].max()
+                    period_low = data['Low'].min()
+                    volatility = data['Close'].pct_change().std() * 100
+                    avg_volume = data['Volume'].mean()
+                    
+                    html_content += f"""
+            <div class="metrics-grid">
+                <div class="metric-card {'negative' if price_change < 0 else ''}">
+                    <h4>Current Price</h4>
+                    <div class="value">${current_price:.2f}</div>
+                </div>
+                <div class="metric-card {'negative' if price_change_pct < 0 else ''}">
+                    <h4>Price Change</h4>
+                    <div class="value">{price_change_pct:+.2f}%</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Period High</h4>
+                    <div class="value">${period_high:.2f}</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Period Low</h4>
+                    <div class="value">${period_low:.2f}</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Volatility</h4>
+                    <div class="value">{volatility:.2f}%</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Average Volume</h4>
+                    <div class="value">{avg_volume:,.0f}</div>
+                </div>
+            </div>
+            
+            <h3>📋 Data Summary</h3>
+            <ul>
+                <li><strong>Data Period:</strong> {data.index[0].strftime('%Y-%m-%d')} to {data.index[-1].strftime('%Y-%m-%d')}</li>
+                <li><strong>Total Records:</strong> {len(data):,}</li>
+                <li><strong>Data Source:</strong> {latest_data_file}</li>
+                <li><strong>Available Indicators:</strong> {len([col for col in data.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume', 'Dividends', 'Stock Splits']])}</li>
+            </ul>
+"""
+            except Exception as e:
+                html_content += f"""
+            <div class="warning">
+                <strong>Warning:</strong> Could not analyze data file {latest_data_file}. Error: {str(e)}
+            </div>
+"""
+            
+            # List all data files
+            html_content += f"""
+            <h3>📁 Available Data Files</h3>
+            <div class="file-list">
+                <ul>
+"""
+            for file in sorted(symbol_files['data_files']):
+                file_path = os.path.join(OUTPUT_DIR, file)
+                file_size = os.path.getsize(file_path)
+                modified = datetime.fromtimestamp(os.path.getmtime(file_path))
+                html_content += f"                    <li>{file} ({file_size:,} bytes, modified {modified.strftime('%Y-%m-%d %H:%M')})</li>\n"
+            
+            html_content += """
+                </ul>
+            </div>
+        </div>
+"""
+
+        # Interactive Charts Section
+        if include_charts and symbol_files['chart_files']:
+            html_content += f"""
+        <div class="section">
+            <h2>📈 Interactive Charts</h2>
+            <p>The following interactive charts provide visual analysis of {symbol} stock performance:</p>
+"""
+            
+            for chart_file in sorted(symbol_files['chart_files']):
+                chart_path = os.path.join(OUTPUT_DIR, chart_file)
+                chart_name = chart_file.replace('visualize_stock_data_', '').replace('.html', '').replace('_', ' ').title()
+                
+                # Try to read and embed the chart HTML
+                try:
+                    with open(chart_path, 'r', encoding='utf-8') as f:
+                        chart_html = f.read()
+                    
+                    # Extract just the Plotly div and script parts
+                    if 'plotly-div' in chart_html or 'Plotly.newPlot' in chart_html:
+                        html_content += f"""
+            <div class="chart-container">
+                <div class="chart-title">{chart_name}</div>
+                {chart_html}
+            </div>
+"""
+                    else:
+                        html_content += f"""
+            <div class="chart-container">
+                <div class="chart-title">{chart_name}</div>
+                <p><strong>Chart File:</strong> <a href="{chart_file}" target="_blank">{chart_file}</a></p>
+                <p><em>Interactive chart available in separate file.</em></p>
+            </div>
+"""
+                except Exception as e:
+                    html_content += f"""
+            <div class="chart-container">
+                <div class="chart-title">{chart_name}</div>
+                <div class="warning">Could not embed chart. File: {chart_file}</div>
+            </div>
+"""
+            
+            html_content += """
+        </div>
+"""
+
+        # Machine Learning Model Results Section
+        if include_model_results and (symbol_files['model_files'] or symbol_files['result_files']):
+            html_content += f"""
+        <div class="section">
+            <h2>🤖 Machine Learning Model Results</h2>
+"""
+            
+            # Find model result files
+            model_result_files = [f for f in symbol_files['result_files'] if 'model' in f and 'backtest' not in f]
+            
+            if model_result_files:
+                for result_file in sorted(model_result_files):
+                    try:
+                        result_path = os.path.join(OUTPUT_DIR, result_file)
+                        with open(result_path, 'r') as f:
+                            results = json.load(f)
+                        
+                        model_type = 'XGBoost' if 'xgboost' in result_file else 'Random Forest' if 'random_forest' in result_file else 'ML Model'
+                        
+                        html_content += f"""
+            <h3>📊 {model_type} Performance</h3>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <h4>Test R² Score</h4>
+                    <div class="value">{results['performance']['test_r2']:.3f}</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Test RMSE</h4>
+                    <div class="value">${results['performance']['test_rmse']:.3f}</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Test MAE</h4>
+                    <div class="value">${results['performance']['test_mae']:.3f}</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Cross-Val R²</h4>
+                    <div class="value">{results['performance']['cv_r2_mean']:.3f}</div>
+                </div>
+            </div>
+            
+            <h4>🎯 Top Features</h4>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Feature</th>
+                        <th>Importance</th>
+                    </tr>
+                </thead>
+                <tbody>
+"""
+                        
+                        for i, feature in enumerate(results['feature_importance'][:10]):
+                            html_content += f"""
+                    <tr>
+                        <td>{i+1}</td>
+                        <td>{feature['feature']}</td>
+                        <td>{feature['importance']:.4f}</td>
+                    </tr>
+"""
+                        
+                        html_content += """
+                </tbody>
+            </table>
+"""
+                    except Exception as e:
+                        html_content += f"""
+            <div class="warning">
+                Could not load model results from {result_file}. Error: {str(e)}
+            </div>
+"""
+            else:
+                html_content += """
+            <div class="warning">
+                No machine learning model results found. Train models using XGBoost or Random Forest tools.
+            </div>
+"""
+            
+            # List model files
+            if symbol_files['model_files']:
+                html_content += f"""
+            <h3>💾 Trained Models</h3>
+            <div class="file-list">
+                <ul>
+"""
+                for file in sorted(symbol_files['model_files']):
+                    file_path = os.path.join(OUTPUT_DIR, file)
+                    file_size = os.path.getsize(file_path)
+                    modified = datetime.fromtimestamp(os.path.getmtime(file_path))
+                    html_content += f"                    <li>{file} ({file_size:,} bytes, modified {modified.strftime('%Y-%m-%d %H:%M')})</li>\n"
+                
+                html_content += """
+                </ul>
+            </div>
+"""
+            
+            html_content += """
+        </div>
+"""
+
+        # Backtesting Results Section
+        if include_backtest_results:
+            backtest_files = [f for f in symbol_files['result_files'] if 'backtest' in f]
+            
+            if backtest_files:
+                html_content += f"""
+        <div class="section">
+            <h2>📊 Backtesting Results</h2>
+"""
+                
+                for backtest_file in sorted(backtest_files):
+                    try:
+                        backtest_path = os.path.join(OUTPUT_DIR, backtest_file)
+                        with open(backtest_path, 'r') as f:
+                            backtest_results = json.load(f)
+                        
+                        strategy_type = backtest_results.get('strategy_type', 'Unknown').title()
+                        
+                        html_content += f"""
+            <h3>🎯 {strategy_type} Strategy Performance</h3>
+            <div class="metrics-grid">
+                <div class="metric-card {'negative' if backtest_results['performance']['total_return_pct'] < 0 else ''}">
+                    <h4>Total Return</h4>
+                    <div class="value">{backtest_results['performance']['total_return_pct']:.2f}%</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Sharpe Ratio</h4>
+                    <div class="value">{backtest_results['performance']['sharpe_ratio']:.2f}</div>
+                </div>
+                <div class="metric-card {'negative' if backtest_results['performance']['max_drawdown_pct'] < -10 else ''}">
+                    <h4>Max Drawdown</h4>
+                    <div class="value">{backtest_results['performance']['max_drawdown_pct']:.2f}%</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Win Rate</h4>
+                    <div class="value">{backtest_results['performance']['win_rate_pct']:.1f}%</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Total Trades</h4>
+                    <div class="value">{backtest_results['performance']['total_trades']}</div>
+                </div>
+                <div class="metric-card {'negative' if backtest_results['benchmark']['excess_return_pct'] < 0 else ''}">
+                    <h4>Excess Return</h4>
+                    <div class="value">{backtest_results['benchmark']['excess_return_pct']:+.2f}%</div>
+                </div>
+            </div>
+            
+            <h4>📊 Strategy vs Benchmark</h4>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Strategy</th>
+                        <th>Buy & Hold</th>
+                        <th>Difference</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Total Return</td>
+                        <td>{backtest_results['performance']['total_return_pct']:.2f}%</td>
+                        <td>{backtest_results['benchmark']['buy_hold_return_pct']:.2f}%</td>
+                        <td>{backtest_results['benchmark']['excess_return_pct']:+.2f}%</td>
+                    </tr>
+                    <tr>
+                        <td>Final Value</td>
+                        <td>${backtest_results['performance']['final_portfolio_value']:,.2f}</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                </tbody>
+            </table>
+"""
+                    except Exception as e:
+                        html_content += f"""
+            <div class="warning">
+                Could not load backtesting results from {backtest_file}. Error: {str(e)}
+            </div>
+"""
+                
+                html_content += """
+        </div>
+"""
+
+        # Custom Analysis Section
+        if custom_analysis:
+            html_content += f"""
+        <div class="section">
+            <h2>💡 Additional Analysis</h2>
+            <div class="analysis-text">
+                {custom_analysis.replace('\n', '<br>')}
+            </div>
+        </div>
+"""
+
+        # File Summary Section
+        html_content += f"""
+        <div class="section">
+            <h2>📁 File Summary</h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <h4>Data Files</h4>
+                    <div class="value">{len(symbol_files['data_files'])}</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Chart Files</h4>
+                    <div class="value">{len(symbol_files['chart_files'])}</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Model Files</h4>
+                    <div class="value">{len(symbol_files['model_files'])}</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Result Files</h4>
+                    <div class="value">{len(symbol_files['result_files'])}</div>
+                </div>
+            </div>
+        </div>
+"""
+
+        # Footer
+        html_content += f"""
+        <div class="footer">
+            <p><strong>Disclaimer:</strong> This analysis is for informational purposes only and should not be considered as investment advice. 
+            Past performance does not guarantee future results. Please consult with a qualified financial advisor before making investment decisions.</p>
+            <p>Report generated on {timestamp} | Total files analyzed: {sum(len(files) for files in symbol_files.values())}</p>
+        </div>
+    </div>
+</body>
+</html>"""
+
+        # Save the report if requested
+        report_filename = None
+        if save_report:
+            report_filename = f"generate_comprehensive_html_report_{symbol}_report_{file_timestamp}.html"
+            report_filepath = os.path.join(OUTPUT_DIR, report_filename)
+            
+            with open(report_filepath, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            
+            file_size = os.path.getsize(report_filepath)
+        
+        # Create summary
+        summary = f"""generate_comprehensive_html_report: Successfully generated comprehensive HTML report for {symbol}:
+
+📊 REPORT OVERVIEW:
+- Symbol: {symbol}
+- Title: {report_title}
+- Generated: {timestamp}
+- Content Sections: Executive Summary, Stock Data, {'Charts, ' if include_charts else ''}{'ML Models, ' if include_model_results else ''}{'Backtesting, ' if include_backtest_results else ''}File Summary
+
+📈 INCLUDED ANALYSIS:
+- Data Files Analyzed: {len(symbol_files['data_files'])}
+- Interactive Charts: {len(symbol_files['chart_files'])} {'(embedded)' if include_charts else '(referenced)'}
+- ML Model Results: {len([f for f in symbol_files['result_files'] if 'model' in f and 'backtest' not in f])}
+- Backtesting Results: {len([f for f in symbol_files['result_files'] if 'backtest' in f])}
+
+🎨 REPORT FEATURES:
+- Professional HTML styling with responsive design
+- Interactive elements and modern UI
+- Comprehensive metrics and visualizations
+- Performance comparisons and insights
+- Embedded charts and analysis
+- Mobile-friendly layout
+
+📁 REPORT SAVED: {report_filename if report_filename else 'Report not saved'}
+- Location: {os.path.join(OUTPUT_DIR, report_filename) if report_filename else 'N/A'}
+- File Size: {file_size:,} bytes ({len(html_content):,} characters)
+- Format: Interactive HTML with embedded CSS styling
+
+💡 USAGE:
+- Open the HTML file in any web browser
+- All charts and data are self-contained
+- Professional presentation ready for sharing
+- Includes all analysis and interactive elements
+"""
+        
+        print(f"✅ generate_comprehensive_html_report: Successfully generated comprehensive HTML report for {symbol}")
+        return summary
+        
+    except Exception as e:
+        error_msg = f"generate_comprehensive_html_report: Error generating report for {symbol}: {str(e)}"
+        print(f"❌ generate_comprehensive_html_report: {error_msg}")
+        return error_msg

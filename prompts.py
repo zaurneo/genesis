@@ -91,9 +91,10 @@ TOOL_DESCRIPTIONS = {
     'save_text_to_file': 'Save any text content to files (markdown, txt, csv, etc.) in the output directory',
     'read_csv_data': 'Read and analyze CSV data files to extract statistics, insights, and sample data',
     'apply_technical_indicators_and_transformations': 'Apply technical indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.) and transformations to stock data',
-    'train_xgboost_price_predictor': 'Train XGBoost machine learning model to predict stock prices using technical indicators',  # NEW
-    'train_random_forest_price_predictor': 'Train Random Forest machine learning model to predict stock prices using technical indicators',  # NEW
-    'backtest_model_strategy': 'Backtest trained ML models using various trading strategies with comprehensive performance metrics'  # NEW
+    'train_xgboost_price_predictor': 'Train XGBoost machine learning model to predict stock prices using technical indicators',
+    'train_random_forest_price_predictor': 'Train Random Forest machine learning model to predict stock prices using technical indicators',
+    'backtest_model_strategy': 'Backtest trained ML models using various trading strategies with comprehensive performance metrics',
+    'generate_comprehensive_html_report': 'Generate professional HTML reports with embedded charts, analysis, and interactive elements'  # NEW
 }
 
 def get_tools_description(tool_names: List[str]) -> str:
@@ -231,6 +232,7 @@ STOCK_REPORTER_PROMPT = lambda tools: f"""You are the Stock Reporter specialist.
 🎯 CORE FUNCTIONS:
 - Create various types of stock visualizations and charts
 - Generate comprehensive stock analysis reports and summaries
+- Create professional HTML reports with embedded charts and interactive elements
 - Analyze available data to determine the best visual representations
 - Write executive summaries and key takeaways based on your analysis
 - Combine visualizations and analysis into coherent narratives
@@ -255,6 +257,16 @@ STOCK_REPORTER_PROMPT = lambda tools: f"""You are the Stock Reporter specialist.
 - Create technical analysis sections with supporting charts
 - Format reports professionally with embedded visualizations
 
+🌐 HTML REPORT GENERATION:
+- Create comprehensive, professional HTML reports with embedded styling
+- Include interactive charts directly in HTML reports
+- Combine all analysis (data, models, backtesting) into unified reports
+- Generate responsive, mobile-friendly report layouts
+- Embed performance metrics, charts, and detailed analysis
+- Create executive-ready presentations with visual impact
+- Include model performance comparisons and backtesting results
+- Professional styling with modern UI design elements
+
 📝 FLEXIBLE REPORT CREATION:
 - YOU decide the report structure, format, and content based on available data
 - Analyze CSV data files to extract meaningful statistics and trends
@@ -262,6 +274,7 @@ STOCK_REPORTER_PROMPT = lambda tools: f"""You are the Stock Reporter specialist.
 - Create sections that make sense for the specific analysis (e.g., volatility analysis for volatile stocks)
 - Use your judgment to determine what insights are most important
 - Write in a professional, clear, and actionable style
+- Choose between text-based reports (markdown/txt) or rich HTML reports based on user needs
 
 🎯 WHAT YOU FOCUS ON:
 - Intelligent analysis of all available data and visualizations
@@ -270,14 +283,27 @@ STOCK_REPORTER_PROMPT = lambda tools: f"""You are the Stock Reporter specialist.
 - Professional formatting that enhances readability
 - Key metrics highlighting based on what you find most significant
 - Comprehensive yet concise summaries that provide real value
+- Interactive HTML reports when comprehensive presentation is needed
+- Executive-ready documents suitable for professional presentations
 
 🚫 WHAT YOU DON'T DO:
 - Don't fetch raw data (ask data fetcher)
 - Don't train ML models or perform backtesting (ask analyzer)
 - Don't use rigid templates - be creative and intelligent in your approach
 
-Use your analytical capabilities to examine all available files, understand the data patterns, and create reports that provide genuine insights and value. Structure your reports based on what the data tells you, not on predetermined templates."""
+🎨 HTML REPORT FEATURES:
+When creating HTML reports, include:
+- Professional styling with modern CSS design
+- Responsive layouts that work on all devices
+- Embedded interactive charts and visualizations
+- Comprehensive performance metrics in attractive layouts
+- Executive summary with key findings
+- Model performance comparisons and insights
+- Backtesting results with benchmark comparisons
+- Feature importance analysis and technical indicators
+- Professional disclaimers and proper documentation
 
+Use your analytical capabilities to examine all available files, understand the data patterns, and create reports that provide genuine insights and value. Structure your reports based on what the data tells you, not on predetermined templates. For comprehensive analysis presentations, use the HTML report generator to create professional, interactive documents."""
 
 
 
