@@ -55,7 +55,6 @@ stock_data_agent = create_react_agent(
 
 # Stock Analyzer agent and node
 stock_analyzer_tools = [
-    visualize_stock_data,
     list_saved_stock_files,
     train_xgboost_price_predictor,  # NEW: Add ML modeling tools
     train_random_forest_price_predictor,  # NEW
@@ -78,7 +77,8 @@ stock_analyzer_agent = create_react_agent(
 stock_reporter_tools = [
     list_saved_stock_files,
     read_csv_data,
-    save_text_to_file
+    save_text_to_file,
+    visualize_stock_data
 ]
 
 stock_reporter_agent = create_react_agent(
