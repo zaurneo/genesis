@@ -67,7 +67,7 @@ def main():
             print("🔄 Running agent workflow...")
             print("="*50)
             
-            for chunk in graph.stream(inputs, config=config):
+            for chunk in graph.stream(inputs, config=config, stream_mode="updates"):
                 print(f"\n🤖 Agent Update:")
                 for node_name, messages in chunk.items():
                     print(f"📍 Node: {node_name}")
@@ -89,7 +89,7 @@ def main():
                 print("="*50)
                 print("The system is ready for your questions or instructions.")
                 print("You can ask about:")
-                print("  • Stock analysis for any symbol")  
+                print("  • Stock analysis for any symbol")
                 print("  • Technical indicators and charts")
                 print("  • Machine learning predictions")
                 print("  • Backtesting strategies")
@@ -112,15 +112,18 @@ def main():
                 # Continue the conversation with user input
                 print(f"\n📝 Processing your request: '{user_input}'")
                 
-                # Update inputs for next iteration
-                inputs = {
+                # Update the existing state with human response
+                graph.update_state(config, {
                     "messages": [
                         {
                             "role": "user",
                             "content": user_input
                         }
                     ]
-                }
+                })
+                
+                # Continue with existing conversation state
+                inputs = None
                 
             else:
                 # No interruption - workflow completed
@@ -141,24 +144,20 @@ def main():
                     print("\n👋 Thank you for using Genesis! Goodbye!")
                     break
                 
-                # Start new workflow with user input
+                # Continue in same session but restart workflow with full context
                 print(f"\n📝 Processing your new request: '{user_input}'")
                 
-                # Reset inputs for new workflow
-                inputs = {
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": user_input
-                        }
-                    ]
-                }
+                # Get current conversation history and add new message
+                current_state = graph.get_state(config)
+                all_messages = current_state.values.get("messages", [])
+                all_messages.append({
+                    "role": "user",
+                    "content": user_input
+                })
                 
-                # Update config with new thread for fresh start
-                session_id = uuid.uuid4()
-                config = {
-                    "configurable": {"thread_id": str(session_id)},
-                    "recursion_limit": 150
+                # Restart with full conversation history
+                inputs = {
+                    "messages": all_messages
                 }
                 
         except KeyboardInterrupt:
