@@ -3,7 +3,7 @@
 Multi-agent collaboration main execution script with supervisor.
 """
 import uuid
-from langgraph_supervisor import create_supervisor
+from supervisor import create_supervisor
 from agents import *
 from models import model_gpt_4o_mini
 from langgraph.checkpoint.memory import InMemorySaver
