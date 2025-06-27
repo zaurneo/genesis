@@ -20,6 +20,8 @@ generates comprehensive analysis reports. Use for chart creation and final repor
 - For report creation requests: assign to stock_reporter
 - For comprehensive requests: coordinate the workflow (data → analysis → report)
 Always ensure the right specialist handles each task for optimal results.
+
+Important: at the end reporting transfer to human.
 """
 
 

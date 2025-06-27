@@ -212,6 +212,7 @@ def create_supervisor(
     add_handoff_back_messages: Optional[bool] = None,
     supervisor_name: str = "supervisor",
     include_agent_name: AgentNameMode | None = None,
+    human_proxy: Optional[str] = None
 ) -> StateGraph:
     """Create a multi-agent supervisor.
 
@@ -311,6 +312,10 @@ def create_supervisor(
             - None: Relies on the LLM provider using the name attribute on the AI message. Currently, only OpenAI supports this.
             - `"inline"`: Add the agent name directly into the content field of the AI message using XML-style tags.
                 Example: `"How can I help you"` -> `"<name>agent_name</name><content>How can I help you?</content>"`
+        human_proxy: Optional name for a human-in-the-loop node. If provided, the supervisor can transfer
+            control to a human for input. The human node will interrupt execution and wait for human input.
+        human_proxy: Optional name for a human-in-the-loop node. If provided, the supervisor can transfer
+            control to a human for input. The human node will interrupt execution and wait for human input.
 
     Example:
         ```python
@@ -341,14 +346,15 @@ def create_supervisor(
             name="research_expert",
         )
 
-        # Create supervisor workflow
+        # Create supervisor workflow with human-in-the-loop
         workflow = create_supervisor(
             [research_agent, math_agent],
             model=ChatOpenAI(model="gpt-4o"),
+            human_proxy="human"
         )
 
         # Compile and run
-        app = workflow.compile()
+        app = workflow.compile(interrupt_before=["human"])
         result = app.invoke({
             "messages": [
                 {
@@ -381,6 +387,14 @@ def create_supervisor(
             )
 
         agent_names.add(agent.name)
+
+    # Add human proxy to agent names if provided
+    if human_proxy:
+        if human_proxy in agent_names:
+            raise ValueError(
+                f"Human proxy name '{human_proxy}' conflicts with an existing agent name. Names must be unique."
+            )
+        agent_names.add(human_proxy)
 
     tool_node = _prepare_tool_node(
         tools,
@@ -415,6 +429,16 @@ def create_supervisor(
     builder = StateGraph(state_schema, config_schema=config_schema)
     builder.add_node(supervisor_agent, destinations=tuple(agent_names) + (END,))
     builder.add_edge(START, supervisor_agent.name)
+    
+    # Add human proxy node if provided
+    if human_proxy:
+        def human_node(state: dict) -> dict:
+            """Human-in-the-loop node that interrupts execution for human input."""
+            pass  # This will cause an interrupt when reached
+        
+        builder.add_node(human_proxy, human_node)
+        builder.add_edge(human_proxy, supervisor_agent.name)
+    
     for agent in agents:
         builder.add_node(
             agent.name,

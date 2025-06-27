@@ -3,7 +3,7 @@
 Multi-agent collaboration main execution script with supervisor.
 """
 import uuid
-from supervisor import create_supervisor
+from supervisor.supervisor import create_supervisor
 from agents import *
 from models import model_gpt_4o_mini
 from langgraph.checkpoint.memory import InMemorySaver
@@ -24,20 +24,23 @@ workflow = create_supervisor(
     [stock_data_agent, stock_analyzer_agent, stock_reporter_agent],
     model=model_gpt_4o_mini,
     output_mode="full_history",
-    prompt=SUPERVISOR_PROMPT
+    prompt=SUPERVISOR_PROMPT,
+    human_proxy="human"
 )
 
 # Compile the workflow
 graph = workflow.compile(
     checkpointer = InMemorySaver(),
-    store = InMemoryStore()
+    store = InMemoryStore(),
+    interrupt_before=["human"]
     )
 
 for chunk in graph.stream({
     "messages": [
         {
             "role": "user", 
-            "content": "Processing Query: 'Get Apple stock data, create technical indicators, tain random forest model, backtest its results, analyze its performance, and create a summary report.'"
+            # "content": "Processing Query: 'Get Apple stock data, create technical indicators, tain random forest model, backtest its results, analyze its performance, and create a summary report.'"
+            "content": "Processing Query: 'Get Apple stock data and transfer_to_human for more questions'"
         }         
     ]
     }, config=config):
