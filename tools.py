@@ -2533,6 +2533,7 @@ def visualize_backtesting_results(
     symbol: str,
     chart_type: Literal["portfolio_performance", "trading_signals", "model_predictions", "combined"] = "combined",
     backtest_files: Optional[str] = None,
+    strategies_to_show: Optional[str] = None,
     include_benchmark: bool = True,
     save_chart: bool = True
 ) -> str:
@@ -2548,6 +2549,7 @@ def visualize_backtesting_results(
                    - "model_predictions": Model predictions vs actual prices
                    - "combined": All visualizations in subplots
         backtest_files: Specific backtest result files to visualize (comma-separated)
+        strategies_to_show: Specific strategies to display (comma-separated, e.g., "xgboost,random_forest")
         include_benchmark: Whether to include buy-and-hold benchmark comparison
         save_chart: Whether to save the interactive chart as HTML file
         
@@ -2601,8 +2603,12 @@ def visualize_backtesting_results(
                 if os.path.exists(portfolio_path):
                     portfolio_df = pd.read_csv(portfolio_path, index_col=0, parse_dates=True)
                     
-                    # Store data with strategy type as key
-                    strategy_key = f"{backtest_results.get('strategy_type', 'unknown')}_{backtest_results.get('model_file', 'model')}"
+                    # Store data with cleaner strategy name
+                    model_type = "XGBoost" if "xgboost" in backtest_results.get('model_file', '') else \
+                                "RandomForest" if "random_forest" in backtest_results.get('model_file', '') else "Model"
+                    strategy_type = backtest_results.get('strategy_type', 'unknown').replace('_', ' ').title()
+                    strategy_key = f"{model_type}_{strategy_type}"
+                    
                     all_backtest_data[strategy_key] = backtest_results
                     portfolio_data[strategy_key] = portfolio_df
                     
@@ -2618,6 +2624,25 @@ def visualize_backtesting_results(
             result = f"[DEBUG] [visualize_backtesting_results] No valid backtesting data could be loaded for {symbol}."
             print(result)
             return result
+        
+        # Filter strategies if specified
+        if strategies_to_show:
+            filter_strategies = [s.strip().lower() for s in strategies_to_show.split(',')]
+            filtered_data = {}
+            filtered_portfolio = {}
+            
+            for strategy_key in all_backtest_data.keys():
+                strategy_lower = strategy_key.lower()
+                if any(filter_str in strategy_lower for filter_str in filter_strategies):
+                    filtered_data[strategy_key] = all_backtest_data[strategy_key]
+                    filtered_portfolio[strategy_key] = portfolio_data[strategy_key]
+            
+            if filtered_data:
+                all_backtest_data = filtered_data
+                portfolio_data = filtered_portfolio
+                print(f"[DEBUG] [visualize_backtesting_results] Filtered to {len(all_backtest_data)} strategies")
+            else:
+                print(f"[DEBUG] [visualize_backtesting_results] No strategies matched filter, showing all")
         
         # Create visualizations based on chart_type
         if chart_type == "portfolio_performance":
@@ -2664,6 +2689,7 @@ def visualize_backtesting_results(
 - Symbol: {symbol}
 - Chart Type: {chart_type.replace('_', ' ').title()}
 - Strategies Analyzed: {len(all_backtest_data)}
+- Strategies Filter: {'Applied' if strategies_to_show else 'None'}
 - Benchmark Included: {'Yes' if include_benchmark else 'No'}
 
 📊 STRATEGIES COMPARED:
@@ -2677,6 +2703,9 @@ def visualize_backtesting_results(
 - Max Drawdown: {performance_summary[best_strategy]['max_drawdown']:.2f}%
 
 📈 VISUALIZATION FEATURES:
+- Independent charts with side legends for better readability
+- Proper date formatting and cumulative return calculations
+- Clean strategy names (e.g., "XGBoost Directional" instead of filenames)
 - Interactive Plotly charts with zoom/pan capabilities
 - Multiple strategy performance comparison
 - Trading signals overlaid on price data
@@ -2694,7 +2723,7 @@ def visualize_backtesting_results(
 - Best Risk-Adjusted: {max(performance_summary.keys(), key=lambda x: performance_summary[x]['sharpe_ratio'])} (Sharpe: {max(data['sharpe_ratio'] for data in performance_summary.values()):.2f})
 - Most Active: {max(performance_summary.keys(), key=lambda x: performance_summary[x]['total_trades'])} ({max(data['total_trades'] for data in performance_summary.values())} trades)
 
-The interactive visualization allows detailed analysis of model performance, trading patterns, and risk-return characteristics across all backtested strategies.
+The interactive visualization allows detailed analysis of model performance, trading patterns, and risk-return characteristics across all backtested strategies with improved legends and date formatting.
 """
         
         print(f"[DEBUG] [visualize_backtesting_results] Completed successfully for {symbol}")
@@ -2714,17 +2743,21 @@ def create_portfolio_performance_chart(symbol, all_backtest_data, portfolio_data
     color_idx = 0
     
     for strategy_key, portfolio_df in portfolio_data.items():
-        # Calculate cumulative returns
+        # Calculate cumulative returns properly
         initial_value = portfolio_df['portfolio_value'].iloc[0]
         cumulative_returns = (portfolio_df['portfolio_value'] / initial_value - 1) * 100
         
+        # Ensure we have valid dates and returns
+        valid_dates = portfolio_df.index
+        valid_returns = cumulative_returns
+        
         fig.add_trace(go.Scatter(
-            x=portfolio_df.index,
-            y=cumulative_returns,
+            x=valid_dates,
+            y=valid_returns,
             mode='lines',
-            name=f'{strategy_key} Strategy',
+            name=strategy_key,
             line=dict(color=colors[color_idx % len(colors)], width=2),
-            hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Return: %{y:.2f}%<extra></extra>'
+            hovertemplate=f'<b>{strategy_key}</b><br>Date: %{{x}}<br>Return: %{{y:.2f}}%<extra></extra>'
         ))
         color_idx += 1
         
@@ -2732,12 +2765,12 @@ def create_portfolio_performance_chart(symbol, all_backtest_data, portfolio_data
         if include_benchmark and 'buy_hold_cumulative' in portfolio_df.columns:
             benchmark_returns = portfolio_df['buy_hold_cumulative'] * 100
             fig.add_trace(go.Scatter(
-                x=portfolio_df.index,
+                x=valid_dates,
                 y=benchmark_returns,
                 mode='lines',
                 name='Buy & Hold Benchmark',
                 line=dict(color='gray', width=2, dash='dash'),
-                hovertemplate='<b>Buy & Hold</b><br>Date: %{x}<br>Return: %{y:.2f}%<extra></extra>'
+                hovertemplate='<b>Buy & Hold</b><br>Date: %{{x}}<br>Return: %{{y:.2f}}%<extra></extra>'
             ))
             include_benchmark = False  # Only add benchmark once
     
@@ -2749,7 +2782,22 @@ def create_portfolio_performance_chart(symbol, all_backtest_data, portfolio_data
         hovermode='x unified',
         width=1200,
         height=600,
-        legend=dict(x=0.02, y=0.98, bgcolor='rgba(255,255,255,0.8)')
+        legend=dict(
+            orientation="v",
+            yanchor="top",
+            y=1,
+            xanchor="left",
+            x=1.02,
+            bgcolor='rgba(255,255,255,0.8)',
+            bordercolor='rgba(0,0,0,0.2)',
+            borderwidth=1
+        )
+    )
+    
+    # Ensure proper date formatting on x-axis
+    fig.update_xaxes(
+        tickformat='%Y-%m-%d',
+        tickangle=45
     )
     
     return fig
@@ -2757,23 +2805,22 @@ def create_portfolio_performance_chart(symbol, all_backtest_data, portfolio_data
 
 def create_trading_signals_chart(symbol, all_backtest_data, portfolio_data):
     """Create trading signals overlaid on price chart."""
-    fig = sp.make_subplots(
-        rows=len(portfolio_data), cols=1,
-        subplot_titles=[f'{strategy} Trading Signals' for strategy in portfolio_data.keys()],
-        vertical_spacing=0.1
-    )
-    
-    row = 1
-    for strategy_key, portfolio_df in portfolio_data.items():
+    # Create individual charts for each strategy instead of subplots
+    if len(portfolio_data) == 1:
+        # Single strategy - use simple layout
+        strategy_key = list(portfolio_data.keys())[0]
+        portfolio_df = list(portfolio_data.values())[0]
+        
+        fig = go.Figure()
+        
         # Price line
         fig.add_trace(go.Scatter(
             x=portfolio_df.index,
             y=portfolio_df['price'],
             mode='lines',
-            name=f'{strategy_key} Price',
-            line=dict(color='blue', width=1),
-            showlegend=(row == 1)
-        ), row=row, col=1)
+            name='Price',
+            line=dict(color='blue', width=2)
+        ))
         
         # Buy signals (signal = 1)
         buy_signals = portfolio_df[portfolio_df['signal'] == 1]
@@ -2783,9 +2830,8 @@ def create_trading_signals_chart(symbol, all_backtest_data, portfolio_data):
                 y=buy_signals['price'],
                 mode='markers',
                 name='Buy Signal',
-                marker=dict(color='green', size=10, symbol='triangle-up'),
-                showlegend=(row == 1)
-            ), row=row, col=1)
+                marker=dict(color='green', size=10, symbol='triangle-up')
+            ))
         
         # Sell signals (signal = -1)
         sell_signals = portfolio_df[portfolio_df['signal'] == -1]
@@ -2795,23 +2841,97 @@ def create_trading_signals_chart(symbol, all_backtest_data, portfolio_data):
                 y=sell_signals['price'],
                 mode='markers',
                 name='Sell Signal',
-                marker=dict(color='red', size=10, symbol='triangle-down'),
+                marker=dict(color='red', size=10, symbol='triangle-down')
+            ))
+        
+        fig.update_layout(
+            title=f'{symbol} Trading Signals - {strategy_key}',
+            xaxis_title='Date',
+            yaxis_title='Price ($)',
+            template='plotly_white',
+            width=1200,
+            height=600,
+            hovermode='x unified',
+            legend=dict(
+                orientation="v",
+                yanchor="top",
+                y=1,
+                xanchor="left",
+                x=1.02,
+                bgcolor='rgba(255,255,255,0.8)',
+                bordercolor='rgba(0,0,0,0.2)',
+                borderwidth=1
+            )
+        )
+        
+    else:
+        # Multiple strategies - use subplots but with better spacing
+        fig = sp.make_subplots(
+            rows=len(portfolio_data), cols=1,
+            subplot_titles=[f'{symbol} - {strategy}' for strategy in portfolio_data.keys()],
+            vertical_spacing=0.15,
+            specs=[[{"secondary_y": False}] for _ in range(len(portfolio_data))]
+        )
+        
+        row = 1
+        for strategy_key, portfolio_df in portfolio_data.items():
+            # Price line
+            fig.add_trace(go.Scatter(
+                x=portfolio_df.index,
+                y=portfolio_df['price'],
+                mode='lines',
+                name=f'{strategy_key} Price',
+                line=dict(color='blue', width=1),
                 showlegend=(row == 1)
             ), row=row, col=1)
+            
+            # Buy signals (signal = 1)
+            buy_signals = portfolio_df[portfolio_df['signal'] == 1]
+            if not buy_signals.empty:
+                fig.add_trace(go.Scatter(
+                    x=buy_signals.index,
+                    y=buy_signals['price'],
+                    mode='markers',
+                    name='Buy Signal',
+                    marker=dict(color='green', size=8, symbol='triangle-up'),
+                    showlegend=(row == 1)
+                ), row=row, col=1)
+            
+            # Sell signals (signal = -1)
+            sell_signals = portfolio_df[portfolio_df['signal'] == -1]
+            if not sell_signals.empty:
+                fig.add_trace(go.Scatter(
+                    x=sell_signals.index,
+                    y=sell_signals['price'],
+                    mode='markers',
+                    name='Sell Signal',
+                    marker=dict(color='red', size=8, symbol='triangle-down'),
+                    showlegend=(row == 1)
+                ), row=row, col=1)
+            
+            row += 1
         
-        row += 1
-    
-    fig.update_layout(
-        title=f'{symbol} Trading Signals Analysis',
-        template='plotly_white',
-        width=1200,
-        height=400 * len(portfolio_data),
-        hovermode='x unified'
-    )
-    
-    # Update y-axis titles
-    for i in range(len(portfolio_data)):
-        fig.update_yaxes(title_text='Price ($)', row=i+1, col=1)
+        fig.update_layout(
+            title=f'{symbol} Trading Signals Analysis',
+            template='plotly_white',
+            width=1200,
+            height=400 * len(portfolio_data),
+            hovermode='x unified',
+            legend=dict(
+                orientation="v",
+                yanchor="top",
+                y=1,
+                xanchor="left",
+                x=1.02,
+                bgcolor='rgba(255,255,255,0.8)',
+                bordercolor='rgba(0,0,0,0.2)',
+                borderwidth=1
+            )
+        )
+        
+        # Update y-axis titles
+        for i in range(len(portfolio_data)):
+            fig.update_yaxes(title_text='Price ($)', row=i+1, col=1)
     
     return fig
 
@@ -2879,7 +2999,16 @@ def create_model_predictions_chart(symbol, all_backtest_data, portfolio_data):
         hovermode='x unified',
         width=1200,
         height=600,
-        legend=dict(x=0.02, y=0.98, bgcolor='rgba(255,255,255,0.8)')
+        legend=dict(
+            orientation="v",
+            yanchor="top",
+            y=1,
+            xanchor="left",
+            x=1.02,
+            bgcolor='rgba(255,255,255,0.8)',
+            bordercolor='rgba(0,0,0,0.2)',
+            borderwidth=1
+        )
     )
     
     return fig
@@ -2912,11 +3041,15 @@ def create_combined_backtesting_chart(symbol, all_backtest_data, portfolio_data,
         initial_value = portfolio_df['portfolio_value'].iloc[0]
         cumulative_returns = (portfolio_df['portfolio_value'] / initial_value - 1) * 100
         
+        # Ensure we have valid dates and returns
+        valid_dates = portfolio_df.index
+        valid_returns = cumulative_returns
+        
         fig.add_trace(go.Scatter(
-            x=portfolio_df.index,
-            y=cumulative_returns,
+            x=valid_dates,
+            y=valid_returns,
             mode='lines',
-            name=f'{strategy_key}',
+            name=strategy_key,
             line=dict(color=colors[color_idx % len(colors)], width=2),
             legendgroup='strategies',
             hovertemplate=f'<b>{strategy_key}</b><br>Date: %{{x}}<br>Return: %{{y:.2f}}%<extra></extra>'
@@ -3033,7 +3166,16 @@ def create_combined_backtesting_chart(symbol, all_backtest_data, portfolio_data,
         hovermode='x unified',
         width=1200,
         height=1200,
-        legend=dict(x=1.02, y=1, bgcolor='rgba(255,255,255,0.8)')
+        legend=dict(
+            orientation="v",
+            yanchor="top",
+            y=1,
+            xanchor="left",
+            x=1.02,
+            bgcolor='rgba(255,255,255,0.8)',
+            bordercolor='rgba(0,0,0,0.2)',
+            borderwidth=1
+        )
     )
     
     # Update axis labels

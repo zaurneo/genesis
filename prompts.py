@@ -89,7 +89,7 @@ TOOL_DESCRIPTIONS = {
     'get_available_stock_periods_and_intervals': 'Show all available data periods and intervals for Yahoo Finance API',
     'list_saved_stock_files': 'List and manage saved stock data files and charts in the output directory',
     'visualize_stock_data': 'Create professional charts (line, candlestick, volume, combined) and save as PNG files',
-    'visualize_backtesting_results': 'Create comprehensive backtesting visualizations showing model performance, trading signals, and portfolio value compared to actual data and benchmarks',
+    'visualize_backtesting_results': 'Create comprehensive backtesting visualizations with clean strategy names, proper date formatting, independent charts with side legends, and ability to filter specific strategies',
     'save_text_to_file': 'Save any text content to files (markdown, txt, csv, etc.) in the output directory',
     'read_csv_data': 'Read and analyze CSV data files to extract statistics, insights, and sample data',
     'apply_technical_indicators_and_transformations': 'Apply technical indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.) and transformations to stock data',
