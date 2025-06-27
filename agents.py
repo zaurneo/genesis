@@ -10,11 +10,22 @@ from tools import (
     save_text_to_file,
     read_csv_data,
     apply_technical_indicators_and_transformations,
-    train_xgboost_price_predictor,  # NEW: Add these imports
-    train_random_forest_price_predictor,  # NEW
-    backtest_model_strategy,  # NEW
+    # Enhanced ML training tools
+    train_xgboost_price_predictor,
+    train_random_forest_price_predictor,
+    # NEW: Additional model types (demonstrating scalability)
+    train_svr_price_predictor,
+    train_gradient_boosting_price_predictor,
+    train_ridge_regression_price_predictor,
+    train_extra_trees_price_predictor,
+    # NEW: Parameter decision and validation tools
+    decide_model_parameters,
+    validate_model_parameters,
+    get_model_selection_guide,
+    # Existing tools
+    backtest_model_strategy,
     generate_comprehensive_html_report,
-    visualize_backtesting_results  # NEW: Add backtesting visualization tool
+    visualize_backtesting_results
 )
 
 model_gpt = model_gpt_4_1
@@ -57,13 +68,23 @@ stock_data_agent = create_react_agent(
 )
 
 
-
-# Stock Analyzer agent and node
+# Stock Analyzer agent and node - ENHANCED with new scalable ML tools
 stock_analyzer_tools = [
     list_saved_stock_files,
-    train_xgboost_price_predictor,  # NEW: Add ML modeling tools
-    train_random_forest_price_predictor,  # NEW
-    backtest_model_strategy  # NEW: Add backtesting tool
+    # Core enhanced ML training tools (using new pipeline)
+    train_xgboost_price_predictor,
+    train_random_forest_price_predictor,
+    # NEW: Additional model types demonstrating zero-duplication scalability
+    train_svr_price_predictor,
+    train_gradient_boosting_price_predictor,
+    train_ridge_regression_price_predictor,
+    train_extra_trees_price_predictor,
+    # NEW: AI-assisted parameter decision and validation tools
+    decide_model_parameters,
+    validate_model_parameters,
+    get_model_selection_guide,
+    # Backtesting and analysis
+    backtest_model_strategy
 ]
 
 stock_analyzer_agent = create_react_agent(
@@ -77,14 +98,13 @@ stock_analyzer_agent = create_react_agent(
 )
 
 
-
 # Stock Reporter agent and node
 stock_reporter_tools = [
     list_saved_stock_files,
     read_csv_data,
     save_text_to_file,
     visualize_stock_data,
-    visualize_backtesting_results,  # NEW: Add backtesting visualization tool
+    visualize_backtesting_results,
     generate_comprehensive_html_report
 ]
 

@@ -1,4 +1,5 @@
 .env
 .txt
 .claude
+output
 __pycache__/

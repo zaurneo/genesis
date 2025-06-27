@@ -864,6 +864,1410 @@ def apply_technical_indicators_and_transformations(
         print(f"❌ apply_technical_indicators_and_transformations: {error_msg}")
         return error_msg
 
+
+
+
+# =============================================================================
+# PARAMETER SCHEMAS AND CONFIGURATION
+# =============================================================================
+
+PARAMETER_SCHEMAS = {
+    "xgboost": {
+        "required": ["n_estimators", "max_depth", "learning_rate"],
+        "optional": ["subsample", "colsample_bytree", "reg_alpha", "reg_lambda"],
+        "defaults": {
+            "n_estimators": 100,
+            "max_depth": 6,
+            "learning_rate": 0.1,
+            "random_state": 42,
+            "n_jobs": -1
+        },
+        "ranges": {
+            "n_estimators": [50, 100, 200, 500],
+            "max_depth": [3, 6, 10, 15],
+            "learning_rate": [0.01, 0.1, 0.2, 0.3]
+        },
+        "description": "Gradient boosting framework optimized for speed and performance"
+    },
+    "random_forest": {
+        "required": ["n_estimators"],
+        "optional": ["max_depth", "min_samples_split", "min_samples_leaf", "max_features"],
+        "defaults": {
+            "n_estimators": 100,
+            "max_depth": None,
+            "min_samples_split": 2,
+            "random_state": 42,
+            "n_jobs": -1
+        },
+        "ranges": {
+            "n_estimators": [50, 100, 200, 500],
+            "max_depth": [None, 10, 20, 30],
+            "min_samples_split": [2, 5, 10]
+        },
+        "description": "Ensemble of decision trees using bootstrap aggregating"
+    },
+    "svr": {
+        "required": ["C", "gamma", "kernel"],
+        "optional": ["epsilon", "degree"],
+        "defaults": {
+            "C": 1.0,
+            "gamma": 'scale',
+            "kernel": 'rbf'
+        },
+        "ranges": {
+            "C": [0.1, 1.0, 10.0],
+            "gamma": ['scale', 'auto', 0.1, 1.0],
+            "kernel": ['rbf', 'linear', 'poly']
+        },
+        "description": "Support Vector Regression for complex non-linear relationships"
+    },
+    "gradient_boosting": {
+        "required": ["n_estimators", "learning_rate", "max_depth"],
+        "optional": ["subsample", "max_features"],
+        "defaults": {
+            "n_estimators": 100,
+            "learning_rate": 0.1,
+            "max_depth": 3,
+            "random_state": 42
+        },
+        "ranges": {
+            "n_estimators": [50, 100, 200],
+            "learning_rate": [0.01, 0.1, 0.2],
+            "max_depth": [3, 6, 10]
+        },
+        "description": "Sequential ensemble method with error correction"
+    },
+    "ridge_regression": {
+        "required": ["alpha"],
+        "optional": ["fit_intercept", "max_iter"],
+        "defaults": {
+            "alpha": 1.0,
+            "fit_intercept": True
+        },
+        "ranges": {
+            "alpha": [0.1, 1.0, 10.0]
+        },
+        "description": "Linear regression with L2 regularization"
+    },
+    "extra_trees": {
+        "required": ["n_estimators"],
+        "optional": ["max_depth", "min_samples_split"],
+        "defaults": {
+            "n_estimators": 100,
+            "max_depth": None,
+            "min_samples_split": 2,
+            "random_state": 42,
+            "n_jobs": -1
+        },
+        "ranges": {
+            "n_estimators": [50, 100, 200, 500],
+            "max_depth": [None, 10, 20, 30],
+            "min_samples_split": [2, 5, 10]
+        },
+        "description": "Extremely randomized trees with random thresholds"
+    },
+    "common": {
+        "target_days": {
+            "default": 1,
+            "options": [1, 3, 5, 7, 14, 30],
+            "description": "Number of days ahead to predict (1=next day, 5=next week, 30=next month)"
+        },
+        "test_size": {
+            "default": 0.2,
+            "range": [0.1, 0.3],
+            "description": "Proportion of data reserved for testing"
+        },
+        "data_requirements": {
+            "min_records": 50,
+            "min_features": 3,
+            "required_indicators": ["SMA", "EMA", "RSI"],
+            "description": "Minimum data requirements for reliable model training"
+        }
+    }
+}
+
+MODELING_CONTEXTS = {
+    "short_term_trading": {
+        "target_days": [1, 3],
+        "preferred_models": ["xgboost", "random_forest"],
+        "key_features": ["RSI", "MACD", "Bollinger_Bands", "Volume_SMA"],
+        "description": "Optimized for day trading and short-term position holding"
+    },
+    "medium_term_investing": {
+        "target_days": [7, 14],
+        "preferred_models": ["random_forest", "xgboost"],
+        "key_features": ["SMA_20", "EMA_50", "Price_Momentum", "Volatility"],
+        "description": "Suitable for swing trading and medium-term investments"
+    },
+    "long_term_forecasting": {
+        "target_days": [30, 60],
+        "preferred_models": ["random_forest"],
+        "key_features": ["SMA_200", "Long_term_trends", "Fundamental_indicators"],
+        "description": "Designed for long-term investment decisions"
+    }
+}
+
+
+# =============================================================================
+# PARAMETER DECISION AND VALIDATION TOOLS
+# =============================================================================
+
+@tool
+def decide_model_parameters(
+    context: str = "general_prediction",
+    model_type: Optional[str] = None,
+    symbol: Optional[str] = None,
+    prediction_horizon: Optional[str] = None,
+    risk_tolerance: str = "medium"
+) -> str:
+    """
+    AI-assisted parameter selection tool that recommends optimal model parameters
+    based on context, market conditions, and prediction goals.
+    
+    This tool helps AI agents make informed decisions about model configuration
+    by analyzing the trading context and providing reasoning for each parameter choice.
+    
+    Args:
+        context: Trading/prediction context. Options:
+                 - "short_term_trading": Day trading, scalping (1-3 days)
+                 - "medium_term_investing": Swing trading (1-2 weeks)  
+                 - "long_term_forecasting": Investment planning (1+ months)
+                 - "general_prediction": Balanced approach for various timeframes
+        
+        model_type: Preferred model type. Options:
+                   - "xgboost": Fast, accurate, handles non-linearity well
+                   - "random_forest": Robust, interpretable, less prone to overfitting
+                   - "svr": Support vector regression for complex patterns
+                   - "gradient_boosting": Sequential error correction approach
+                   - "ridge_regression": Linear with regularization
+                   - "extra_trees": Extremely randomized trees
+                   - None: Auto-select based on context
+        
+        symbol: Stock symbol (e.g., "AAPL", "TSLA") for symbol-specific optimization
+        
+        prediction_horizon: Specific prediction timeframe. Options:
+                           - "next_day": 1-day ahead prediction
+                           - "next_week": 5-7 day prediction
+                           - "next_month": 30-day prediction
+                           - None: Auto-select based on context
+        
+        risk_tolerance: Risk management preference. Options:
+                       - "conservative": Prioritize stability over accuracy
+                       - "medium": Balanced risk-reward approach
+                       - "aggressive": Maximize accuracy, accept higher risk
+    
+    Returns:
+        Formatted string with recommended parameters and detailed reasoning
+        that AI agents can parse and use for model configuration decisions.
+    
+    Example Usage for AI Agents:
+        - For day trading: decide_model_parameters("short_term_trading", "xgboost", "AAPL", "next_day", "aggressive")
+        - For investment analysis: decide_model_parameters("long_term_forecasting", None, "GOOGL", "next_month", "conservative")
+        - For general analysis: decide_model_parameters("general_prediction", "random_forest")
+    """
+    print(f"🔄 decide_model_parameters: Analyzing context '{context}' for parameter recommendations...")
+    
+    try:
+        recommendations = {}
+        reasoning = {}
+        
+        # Context-based recommendations
+        if context in MODELING_CONTEXTS:
+            context_config = MODELING_CONTEXTS[context]
+            
+            # Target days selection
+            if prediction_horizon == "next_day":
+                target_days = 1
+            elif prediction_horizon == "next_week":
+                target_days = 7
+            elif prediction_horizon == "next_month":
+                target_days = 30
+            else:
+                target_days = context_config["target_days"][0]  # Use first recommended option
+            
+            recommendations["target_days"] = target_days
+            reasoning["target_days"] = f"Selected {target_days} days based on {context} context and {prediction_horizon if prediction_horizon else 'default'} horizon"
+            
+            # Model type selection
+            if model_type is None:
+                recommended_model = context_config["preferred_models"][0]
+            else:
+                recommended_model = model_type if model_type in context_config["preferred_models"] else context_config["preferred_models"][0]
+            
+            recommendations["model_type"] = recommended_model
+            reasoning["model_type"] = f"Selected {recommended_model} - {PARAMETER_SCHEMAS[recommended_model]['description']}"
+            
+        else:
+            # Default recommendations
+            recommendations["target_days"] = 1
+            recommendations["model_type"] = model_type if model_type else "xgboost"
+            reasoning["target_days"] = "Default 1-day prediction for general analysis"
+            reasoning["model_type"] = f"Selected {recommendations['model_type']} as specified or default choice"
+        
+        # Risk-based parameter adjustment
+        selected_model = recommendations["model_type"]
+        model_schema = PARAMETER_SCHEMAS[selected_model]
+        
+        if risk_tolerance == "conservative":
+            if selected_model == "xgboost":
+                recommendations.update({
+                    "n_estimators": 50,  # Fewer trees = less overfitting
+                    "max_depth": 3,      # Shallow trees = more conservative
+                    "learning_rate": 0.01 # Slower learning = more stable
+                })
+                reasoning["parameters"] = "Conservative XGBoost: fewer estimators, shallow depth, slow learning rate for stability"
+            elif selected_model == "random_forest":
+                recommendations.update({
+                    "n_estimators": 100,
+                    "max_depth": 10,     # Limited depth
+                    "min_samples_split": 10  # Require more samples to split
+                })
+                reasoning["parameters"] = "Conservative Random Forest: limited depth, higher split threshold for robustness"
+            else:
+                # Use conservative defaults for other models
+                recommendations.update(model_schema["defaults"])
+                reasoning["parameters"] = f"Conservative {selected_model} with default parameters for stability"
+                
+        elif risk_tolerance == "aggressive":
+            if selected_model == "xgboost":
+                recommendations.update({
+                    "n_estimators": 200,  # More trees = better fitting
+                    "max_depth": 10,      # Deeper trees = capture complexity
+                    "learning_rate": 0.2  # Faster learning = quicker adaptation
+                })
+                reasoning["parameters"] = "Aggressive XGBoost: more estimators, deeper trees, faster learning for maximum accuracy"
+            elif selected_model == "random_forest":
+                recommendations.update({
+                    "n_estimators": 200,
+                    "max_depth": None,    # Unlimited depth
+                    "min_samples_split": 2  # Split with minimum samples
+                })
+                reasoning["parameters"] = "Aggressive Random Forest: more trees, unlimited depth, minimal split threshold for complexity"
+            else:
+                # Use defaults but potentially more aggressive
+                recommendations.update(model_schema["defaults"])
+                reasoning["parameters"] = f"Aggressive {selected_model} parameters for maximum performance"
+        
+        else:  # medium risk
+            # Use default parameters from schema
+            recommendations.update(model_schema["defaults"])
+            reasoning["parameters"] = f"Balanced {selected_model} parameters optimized for general performance"
+        
+        # Symbol-specific adjustments (if applicable)
+        if symbol:
+            # High volatility stocks (examples)
+            volatile_stocks = ["TSLA", "GME", "AMC", "MEME"]
+            if symbol.upper() in volatile_stocks:
+                if selected_model == "random_forest":
+                    recommendations["n_estimators"] = min(recommendations.get("n_estimators", 100) + 50, 300)
+                    reasoning["symbol_adjustment"] = f"Increased ensemble size for high-volatility stock {symbol}"
+                else:
+                    if "learning_rate" in recommendations:
+                        recommendations["learning_rate"] = max(recommendations.get("learning_rate", 0.1) - 0.05, 0.01)
+                    reasoning["symbol_adjustment"] = f"Adjusted parameters for volatile stock {symbol}"
+        
+        # Additional recommendations
+        recommendations.update({
+            "test_size": 0.2,
+            "save_model": True,
+            "save_predictions": True
+        })
+        reasoning["data_split"] = "80/20 train-test split provides good balance of training data and validation"
+        reasoning["saving"] = "Enable model and prediction saving for analysis and backtesting"
+        
+        # Format response for AI agent consumption
+        summary = f"""decide_model_parameters: Parameter recommendations for {context} context:
+
+🎯 CONTEXT ANALYSIS:
+- Use Case: {context.replace('_', ' ').title()}
+- Model Type: {recommendations['model_type'].upper()}
+- Prediction Horizon: {recommendations['target_days']} day(s)
+- Risk Profile: {risk_tolerance.title()}
+- Symbol: {symbol if symbol else 'Generic'}
+
+🔧 RECOMMENDED PARAMETERS:
+"""
+        
+        # Add model-specific parameters
+        for param, value in recommendations.items():
+            if param in ["model_type", "target_days", "test_size", "save_model", "save_predictions"]:
+                continue
+            summary += f"- {param}: {value}\n"
+        
+        summary += f"""
+📊 CONFIGURATION DETAILS:
+- Target Days: {recommendations['target_days']}
+- Test Size: {recommendations['test_size']}
+- Save Model: {recommendations['save_model']}
+- Save Predictions: {recommendations['save_predictions']}
+
+💡 REASONING:
+"""
+        
+        for key, reason in reasoning.items():
+            summary += f"- {key.replace('_', ' ').title()}: {reason}\n"
+        
+        summary += f"""
+🚀 NEXT STEPS FOR AI AGENT:
+1. Use recommended model_type: '{recommendations['model_type']}'
+2. Apply suggested parameters in training function
+3. Set target_days to {recommendations['target_days']} for optimal horizon
+4. Consider market conditions and adjust if needed
+
+📋 COPY-PASTE READY PARAMETERS:
+model_type='{recommendations['model_type']}', target_days={recommendations['target_days']}, test_size={recommendations['test_size']}"""
+        
+        # Add model-specific parameter string
+        model_params = []
+        for param, value in recommendations.items():
+            if param not in ["model_type", "target_days", "test_size", "save_model", "save_predictions"]:
+                if isinstance(value, str):
+                    model_params.append(f"{param}='{value}'")
+                else:
+                    model_params.append(f"{param}={value}")
+        
+        if model_params:
+            summary += f", {', '.join(model_params)}"
+        
+        print(f"✅ decide_model_parameters: Generated recommendations for {context} context")
+        return summary
+        
+    except Exception as e:
+        error_msg = f"decide_model_parameters: Error generating recommendations: {str(e)}"
+        print(f"❌ decide_model_parameters: {error_msg}")
+        return error_msg
+
+
+@tool
+def validate_model_parameters(
+    model_type: str,
+    parameters: dict
+) -> str:
+    """
+    Validate model parameters against schema and provide warnings/suggestions.
+    
+    This tool helps AI agents ensure their parameter choices are valid and optimal
+    before training models, preventing errors and suboptimal configurations.
+    
+    Args:
+        model_type: Type of model to validate parameters for ("xgboost", "random_forest", etc.)
+        parameters: Dictionary of parameters to validate
+    
+    Returns:
+        Validation report with status, warnings, and suggestions for AI agents
+    
+    Example Usage:
+        validate_model_parameters("xgboost", {"n_estimators": 1000, "max_depth": 20, "learning_rate": 0.5})
+    """
+    print(f"🔄 validate_model_parameters: Validating {model_type} parameters...")
+    
+    try:
+        if model_type not in PARAMETER_SCHEMAS:
+            return f"validate_model_parameters: Unknown model type '{model_type}'. Supported types: {list(PARAMETER_SCHEMAS.keys())}"
+        
+        schema = PARAMETER_SCHEMAS[model_type]
+        validation_results = {
+            "status": "valid",
+            "warnings": [],
+            "suggestions": [],
+            "missing_required": [],
+            "out_of_range": []
+        }
+        
+        # Check required parameters
+        for required_param in schema["required"]:
+            if required_param not in parameters:
+                validation_results["missing_required"].append(required_param)
+                validation_results["status"] = "invalid"
+        
+        # Check parameter ranges and values
+        for param, value in parameters.items():
+            if param in schema.get("ranges", {}):
+                expected_range = schema["ranges"][param]
+                if isinstance(expected_range, list):
+                    if value not in expected_range and not any(isinstance(opt, type(value)) and opt == value for opt in expected_range):
+                        validation_results["out_of_range"].append(f"{param}={value} (expected: {expected_range})")
+                        validation_results["warnings"].append(f"Parameter {param}={value} may not be optimal")
+        
+        # Performance warnings
+        if model_type == "xgboost":
+            if parameters.get("n_estimators", 0) > 500:
+                validation_results["warnings"].append("High n_estimators (>500) may cause overfitting and slow training")
+            if parameters.get("learning_rate", 0) > 0.3:
+                validation_results["warnings"].append("High learning_rate (>0.3) may cause unstable training")
+            if parameters.get("max_depth", 0) > 15:
+                validation_results["warnings"].append("Very deep trees (>15) may overfit to training data")
+        
+        elif model_type == "random_forest":
+            if parameters.get("n_estimators", 0) > 500:
+                validation_results["warnings"].append("High n_estimators (>500) increases training time with diminishing returns")
+            if parameters.get("min_samples_split", 10) < 2:
+                validation_results["warnings"].append("Very low min_samples_split may cause overfitting")
+        
+        # Generate suggestions
+        if not validation_results["warnings"]:
+            validation_results["suggestions"].append("Parameters look good for general use")
+        else:
+            validation_results["suggestions"].append("Consider using decide_model_parameters() for optimized configuration")
+        
+        # Format response
+        status_icon = "✅" if validation_results["status"] == "valid" else "❌"
+        summary = f"""validate_model_parameters: {status_icon} Parameter validation for {model_type}:
+
+📊 VALIDATION STATUS: {validation_results['status'].upper()}
+
+"""
+        
+        if validation_results["missing_required"]:
+            summary += f"❌ MISSING REQUIRED PARAMETERS:\n"
+            for param in validation_results["missing_required"]:
+                default_val = schema["defaults"].get(param, "N/A")
+                summary += f"  - {param} (default: {default_val})\n"
+            summary += "\n"
+        
+        if validation_results["warnings"]:
+            summary += f"⚠️ WARNINGS:\n"
+            for warning in validation_results["warnings"]:
+                summary += f"  - {warning}\n"
+            summary += "\n"
+        
+        if validation_results["suggestions"]:
+            summary += f"💡 SUGGESTIONS:\n"
+            for suggestion in validation_results["suggestions"]:
+                summary += f"  - {suggestion}\n"
+            summary += "\n"
+        
+        summary += f"🎯 RECOMMENDED NEXT STEPS:\n"
+        if validation_results["status"] == "valid":
+            summary += "  - Parameters validated successfully\n"
+            summary += "  - Proceed with model training\n"
+        else:
+            summary += "  - Fix missing required parameters\n"
+            summary += "  - Consider parameter optimization\n"
+        
+        print(f"✅ validate_model_parameters: Validation completed for {model_type}")
+        return summary
+        
+    except Exception as e:
+        error_msg = f"validate_model_parameters: Error validating parameters: {str(e)}"
+        print(f"❌ validate_model_parameters: {error_msg}")
+        return error_msg
+
+
+@tool
+def get_model_selection_guide(
+    use_case: str = "general",
+    symbol: Optional[str] = None,
+    data_characteristics: str = "unknown"
+) -> str:
+    """
+    AI Agent decision support tool for selecting optimal model type and parameters.
+    
+    This tool provides intelligent recommendations for model selection based on
+    trading context, data characteristics, and performance requirements.
+    
+    Args:
+        use_case: Trading/prediction context
+                 - "day_trading": 1-day predictions, high frequency
+                 - "swing_trading": 3-7 day predictions, medium frequency  
+                 - "position_trading": 14-30 day predictions, low frequency
+                 - "long_term_investing": 30+ day predictions
+                 - "general": Balanced approach
+        
+        symbol: Stock symbol for symbol-specific recommendations
+        
+        data_characteristics: Data quality and patterns
+                            - "high_volatility": TSLA, MEME stocks
+                            - "stable": AAPL, MSFT, large caps
+                            - "trending": Strong directional movement
+                            - "sideways": Range-bound trading
+                            - "noisy": Inconsistent patterns
+                            - "unknown": No specific characteristics
+    
+    Returns:
+        Comprehensive model selection guide with specific recommendations
+    """
+    
+    recommendations = {
+        'day_trading': {
+            'primary_model': 'xgboost', 
+            'secondary_model': 'svr',
+            'target_days': 1,
+            'rationale': 'XGBoost excels at capturing short-term non-linear patterns',
+            'xgboost_params': {'n_estimators': 150, 'max_depth': 4, 'learning_rate': 0.1},
+            'avoid': 'ridge_regression (too simple for intraday patterns)'
+        },
+        
+        'swing_trading': {
+            'primary_model': 'random_forest',
+            'secondary_model': 'xgboost', 
+            'target_days': 5,
+            'rationale': 'Random Forest provides stable predictions for medium-term trends',
+            'random_forest_params': {'n_estimators': 200, 'max_depth': None},
+            'avoid': 'linear models (insufficient for multi-day complexity)'
+        },
+        
+        'position_trading': {
+            'primary_model': 'random_forest',
+            'secondary_model': 'gradient_boosting',
+            'target_days': 14,
+            'rationale': 'Ensemble methods handle longer-term trend analysis well',
+            'random_forest_params': {'n_estimators': 300, 'min_samples_split': 5},
+            'avoid': 'svr (computationally expensive for longer horizons)'
+        },
+        
+        'long_term_investing': {
+            'primary_model': 'ridge_regression',
+            'secondary_model': 'random_forest',
+            'target_days': 30,
+            'rationale': 'Linear models capture fundamental long-term relationships',
+            'ridge_params': {'alpha': 2.0},
+            'avoid': 'xgboost (may overfit to short-term noise)'
+        }
+    }
+    
+    volatility_adjustments = {
+        'high_volatility': {
+            'recommendation': 'Increase regularization, use ensemble methods',
+            'xgboost_adjust': {'learning_rate': 0.05, 'max_depth': 3},
+            'random_forest_adjust': {'min_samples_split': 10, 'n_estimators': 250}
+        },
+        
+        'stable': {
+            'recommendation': 'Standard parameters work well',
+            'note': 'Can use more aggressive parameters for higher accuracy'
+        },
+        
+        'noisy': {
+            'recommendation': 'Prioritize Random Forest and regularization',
+            'primary_model_override': 'random_forest',
+            'avoid': 'svr (sensitive to noise)'
+        }
+    }
+    
+    # Generate recommendation
+    context = recommendations.get(use_case, recommendations['general'] if 'general' in recommendations else recommendations['day_trading'])
+    vol_context = volatility_adjustments.get(data_characteristics, {})
+    
+    summary = f"""get_model_selection_guide: Model Selection Recommendations for {use_case.replace('_', ' ').title()}:
+
+🎯 PRIMARY RECOMMENDATION:
+- Model Type: {context['primary_model'].upper()}
+- Target Days: {context['target_days']}
+- Rationale: {context['rationale']}
+
+🔧 RECOMMENDED PARAMETERS:
+"""
+    
+    # Add parameter recommendations
+    param_key = f"{context['primary_model']}_params"
+    if param_key in context:
+        for param, value in context[param_key].items():
+            summary += f"- {param}: {value}\n"
+    
+    # Add volatility adjustments
+    if data_characteristics != 'unknown' and vol_context:
+        summary += f"\n📊 {data_characteristics.replace('_', ' ').title().upper()} ADJUSTMENTS:\n"
+        summary += f"- Strategy: {vol_context['recommendation']}\n"
+        
+        if f"{context['primary_model']}_adjust" in vol_context:
+            summary += "- Parameter Adjustments:\n"
+            for param, value in vol_context[f"{context['primary_model']}_adjust"].items():
+                summary += f"  * {param}: {value}\n"
+    
+    summary += f"""
+🥈 ALTERNATIVE MODEL:
+- Secondary Choice: {context['secondary_model'].upper()}
+- Use When: Primary model shows signs of overfitting or underperformance
+
+❌ AVOID:
+- {context['avoid']}
+
+🚀 QUICK START COMMANDS:
+# Primary recommendation
+train_{context['primary_model']}_price_predictor(
+    symbol="{symbol if symbol else 'YOUR_SYMBOL'}",
+    target_days={context['target_days']},
+"""
+    
+    if param_key in context:
+        for param, value in context[param_key].items():
+            if isinstance(value, str):
+                summary += f"    {param}='{value}',\n"
+            else:
+                summary += f"    {param}={value},\n"
+    
+    summary += """)
+
+# Get parameter recommendations first
+decide_model_parameters(
+    context="{use_case}",
+    model_type="{context['primary_model']}",
+    symbol="{symbol if symbol else 'YOUR_SYMBOL'}"
+)
+
+💡 AI AGENT DECISION TREE:
+1. ✅ Use decide_model_parameters() for intelligent parameter selection
+2. ✅ Start with primary model recommendation
+3. ✅ Compare results with secondary model
+4. ✅ Adjust parameters based on initial results
+5. ✅ Use validate_model_parameters() before training
+6. ✅ Always enable save_model=True for backtesting
+
+📈 PERFORMANCE EXPECTATIONS:
+- R² Score: {'>0.6' if use_case in ['day_trading', 'swing_trading'] else '>0.4'} (good performance)
+- Directional Accuracy: {'>55%' if use_case == 'day_trading' else '>60%'} 
+- Information Ratio: >-0.5 (acceptable risk-adjusted performance)"""
+
+    return summary
+
+
+# =============================================================================
+# SCALABLE CORE FUNCTIONS
+# =============================================================================
+
+def prepare_model_data(
+    symbol: str,
+    source_file: Optional[str] = None,
+    target_days: int = 1,
+    test_size: float = 0.2
+) -> tuple:
+    """
+    Universal data preparation pipeline for all machine learning models.
+    
+    This function provides a standardized approach to loading, cleaning, and preparing
+    stock market data with technical indicators for predictive modeling. It handles
+    feature selection, target variable creation, train-test splitting, and feature scaling.
+    
+    Key Features:
+    - Automatic enhanced data file detection
+    - Robust feature selection and validation
+    - Time-series aware train-test splitting
+    - Standardized feature scaling
+    - Comprehensive error handling and validation
+    
+    Args:
+        symbol (str): Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA', 'MSFT').
+                     Must be uppercase format. Used to locate relevant data files.
+        
+        source_file (Optional[str]): Specific enhanced CSV file with technical indicators.
+                                   If None, automatically finds most recent enhanced data file.
+                                   File should contain OHLCV data plus technical indicators.
+                                   Example: "apply_technical_indicators_AAPL_enhanced_20241127_143022.csv"
+        
+        target_days (int): Number of days ahead to predict (1-90 recommended).
+                          - 1: Next day prediction (day trading)
+                          - 3-7: Short-term swing trading
+                          - 14-30: Medium-term investing
+                          - 30+: Long-term forecasting
+        
+        test_size (float): Proportion of data reserved for testing (0.1-0.3 recommended).
+                          Uses time-series split (latest data for testing).
+                          0.2 = 20% test set, 80% training set.
+    
+    Returns:
+        tuple: (model_data_dict, error_message)
+            - model_data_dict (dict): Contains all prepared data if successful:
+                * 'X_train', 'X_test': Raw feature DataFrames
+                * 'X_train_scaled', 'X_test_scaled': Scaled feature arrays
+                * 'y_train', 'y_test': Target variable Series
+                * 'scaler': Fitted StandardScaler object
+                * 'feature_cols': List of feature column names
+                * 'data_source': Description of data source used
+                * 'full_X', 'full_y': Complete dataset for cross-validation
+            - error_message (str): Error description if preparation failed, None if successful
+    
+    Data Requirements:
+        - Minimum 50 records for reliable model training
+        - At least 3 technical indicators/features
+        - Clean data without excessive missing values
+        - Enhanced data file with technical indicators pre-computed
+    
+    Example Usage for AI Agents:
+        # Auto-detect latest data file
+        data, error = prepare_model_data("AAPL", target_days=5, test_size=0.2)
+        
+        # Use specific data file
+        data, error = prepare_model_data("TSLA", "enhanced_data.csv", target_days=1, test_size=0.15)
+        
+        # Check for errors
+        if error:
+            print(f"Data preparation failed: {error}")
+        else:
+            print(f"Prepared {len(data['X_train'])} training samples")
+    """
+    symbol = symbol.upper()
+    
+    # Load enhanced data with technical indicators
+    if source_file:
+        if not source_file.endswith('.csv'):
+            source_file += '.csv'
+        filepath = os.path.join(OUTPUT_DIR, source_file)
+        if not os.path.exists(filepath):
+            return None, f"Source file '{source_file}' not found."
+        data = pd.read_csv(filepath, index_col=0, parse_dates=True)
+        data_source = f"file: {source_file}"
+    else:
+        # Find most recent enhanced data file
+        enhanced_files = [f for f in os.listdir(OUTPUT_DIR) if 
+                        f.startswith(f"apply_technical_indicators_and_transformations_{symbol}_") and f.endswith('.csv')]
+        if enhanced_files:
+            latest_file = max(enhanced_files, key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
+            filepath = os.path.join(OUTPUT_DIR, latest_file)
+            data = pd.read_csv(filepath, index_col=0, parse_dates=True)
+            data_source = f"enhanced file: {latest_file}"
+        else:
+            return None, f"No enhanced data files found for {symbol}. Please run technical indicators first."
+    
+    if data.empty or len(data) < 50:
+        return None, f"Insufficient data for {symbol}. Need at least 50 records."
+    
+    # Prepare features and target
+    data['Target'] = data['Close'].shift(-target_days)
+    
+    # Select feature columns
+    exclude_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'Dividends', 'Stock Splits', 'Target']
+    feature_cols = [col for col in data.columns if col not in exclude_cols and not data[col].isnull().all()]
+    
+    if len(feature_cols) < 3:
+        return None, f"Insufficient technical indicators. Found only {len(feature_cols)} features."
+    
+    # Remove rows with NaN values
+    model_data = data[feature_cols + ['Target']].dropna()
+    
+    if len(model_data) < 30:
+        return None, f"Insufficient clean data. Only {len(model_data)} records available."
+    
+    X = model_data[feature_cols]
+    y = model_data['Target']
+    
+    # Train-test split (time series split)
+    split_idx = int(len(X) * (1 - test_size))
+    X_train, X_test = X[:split_idx], X[split_idx:]
+    y_train, y_test = y[:split_idx], y[split_idx:]
+    
+    # Scale features
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    return {
+        'X_train': X_train,
+        'X_test': X_test,
+        'X_train_scaled': X_train_scaled,
+        'X_test_scaled': X_test_scaled,
+        'y_train': y_train,
+        'y_test': y_test,
+        'scaler': scaler,
+        'feature_cols': feature_cols,
+        'data_source': data_source,
+        'full_X': X,
+        'full_y': y
+    }, None
+
+
+def get_train_test_predictions(model, model_data: dict) -> dict:
+    """
+    Universal prediction generator for all trained models.
+    
+    Generates predictions for both training and test sets using any trained
+    scikit-learn compatible model. Organizes results with timestamps for
+    comprehensive model evaluation and analysis.
+    
+    Args:
+        model: Trained machine learning model with predict() method.
+               Compatible with scikit-learn, XGBoost, LightGBM, etc.
+               Must be already fitted/trained on training data.
+        
+        model_data (dict): Dictionary containing prepared model data from prepare_model_data().
+                          Must include scaled features and target variables for both sets.
+    
+    Returns:
+        dict: Comprehensive predictions dictionary containing:
+            - 'train_predictions': Array of training set predictions
+            - 'test_predictions': Array of test set predictions  
+            - 'train_actuals': Array of actual training values
+            - 'test_actuals': Array of actual test values
+            - 'train_dates': DatetimeIndex of training dates
+            - 'test_dates': DatetimeIndex of test dates
+            - 'train_features': DataFrame of training features
+            - 'test_features': DataFrame of test features
+    
+    Example Usage:
+        model = XGBRegressor().fit(model_data['X_train_scaled'], model_data['y_train'])
+        predictions = get_train_test_predictions(model, model_data)
+        
+        # Access predictions
+        train_rmse = np.sqrt(mean_squared_error(predictions['train_actuals'], predictions['train_predictions']))
+    """
+    train_pred = model.predict(model_data['X_train_scaled'])
+    test_pred = model.predict(model_data['X_test_scaled'])
+    
+    return {
+        'train_predictions': train_pred,
+        'test_predictions': test_pred,
+        'train_actuals': model_data['y_train'].values,
+        'test_actuals': model_data['y_test'].values,
+        'train_dates': model_data['y_train'].index,
+        'test_dates': model_data['y_test'].index,
+        'train_features': model_data['X_train'],
+        'test_features': model_data['X_test']
+    }
+
+
+def assess_model_metrics(predictions_data: dict, model, model_data: dict) -> dict:
+    """
+    Universal model performance assessment for any machine learning model.
+    
+    Calculates comprehensive performance metrics including traditional regression metrics,
+    financial-specific indicators, and cross-validation scores. Fully scalable to work
+    with any scikit-learn compatible model without hard-coded model types.
+    
+    Key Metrics Calculated:
+    - Regression: RMSE, MAE, R², MAPE
+    - Financial: Information Ratio (Sharpe-like), Directional Accuracy
+    - Validation: Time-series cross-validation scores
+    - Error Analysis: Error distributions and volatility
+    
+    Args:
+        predictions_data (dict): Dictionary from get_train_test_predictions() containing
+                               predictions and actuals for both training and test sets.
+        
+        model: Trained model instance (any scikit-learn compatible model).
+               Used for cross-validation. Must have get_params() method.
+               Examples: XGBRegressor, RandomForestRegressor, SVR, etc.
+        
+        model_data (dict): Dictionary from prepare_model_data() containing
+                          full dataset and scaler for cross-validation.
+    
+    Returns:
+        dict: Comprehensive metrics dictionary:
+            - 'train_metrics': Training set performance metrics
+            - 'test_metrics': Test set performance metrics  
+            - 'cross_validation': Cross-validation scores and statistics
+            
+            Each metrics subdictionary contains:
+            - 'rmse': Root Mean Square Error
+            - 'mae': Mean Absolute Error  
+            - 'r2': R-squared coefficient
+            - 'information_ratio': Risk-adjusted accuracy measure
+            - 'mape': Mean Absolute Percentage Error
+            - 'directional_accuracy': Percentage of correct trend predictions
+            - 'error_std': Standard deviation of prediction errors
+            - 'mean_abs_error': Mean absolute prediction error
+    
+    Scalability Features:
+    - Works with any model that has get_params() method
+    - Generic cross-validation using model's parameter structure
+    - No hard-coded model type assumptions
+    - Automatic feature importance detection (if available)
+    - Robust error handling for different model types
+    
+    Example Usage:
+        predictions = get_train_test_predictions(trained_model, model_data)
+        metrics = assess_model_metrics(predictions, trained_model, model_data)
+        
+        print(f"Test R²: {metrics['test_metrics']['r2']:.3f}")
+        print(f"Cross-val mean: {metrics['cross_validation']['cv_r2_mean']:.3f}")
+    """
+    import numpy as np
+    
+    # Extract data
+    train_pred = predictions_data['train_predictions']
+    test_pred = predictions_data['test_predictions']
+    train_actual = predictions_data['train_actuals']
+    test_actual = predictions_data['test_actuals']
+    
+    # Calculate basic metrics
+    train_rmse = np.sqrt(mean_squared_error(train_actual, train_pred))
+    test_rmse = np.sqrt(mean_squared_error(test_actual, test_pred))
+    train_mae = mean_absolute_error(train_actual, train_pred)
+    test_mae = mean_absolute_error(test_actual, test_pred)
+    train_r2 = r2_score(train_actual, train_pred)
+    test_r2 = r2_score(test_actual, test_pred)
+    
+    # Calculate prediction errors
+    train_errors = train_pred - train_actual
+    test_errors = test_pred - test_actual
+    
+    # Information Ratio (Sharpe-like ratio for predictions)
+    train_mean_abs_error = np.mean(np.abs(train_errors))
+    test_mean_abs_error = np.mean(np.abs(test_errors))
+    train_error_std = np.std(train_errors)
+    test_error_std = np.std(test_errors)
+    
+    # Information ratio: negative because we want lower error/volatility to be better
+    train_info_ratio = -train_mean_abs_error / train_error_std if train_error_std > 0 else 0
+    test_info_ratio = -test_mean_abs_error / test_error_std if test_error_std > 0 else 0
+    
+    # SCALABLE Cross-validation using generic model recreation
+    tscv = TimeSeriesSplit(n_splits=3)
+    cv_scores = []
+    
+    X_full = model_data['full_X']
+    y_full = model_data['full_y']
+    
+    for train_idx, val_idx in tscv.split(X_full):
+        try:
+            X_cv_train, X_cv_val = X_full.iloc[train_idx], X_full.iloc[val_idx]
+            y_cv_train, y_cv_val = y_full.iloc[train_idx], y_full.iloc[val_idx]
+            
+            # Scale features for CV
+            cv_scaler = StandardScaler()
+            X_cv_train_scaled = cv_scaler.fit_transform(X_cv_train)
+            X_cv_val_scaled = cv_scaler.transform(X_cv_val)
+            
+            # SCALABLE: Create new model instance using original model's parameters
+            # This works for ANY scikit-learn compatible model
+            model_params = model.get_params()
+            cv_model = type(model)(**model_params)
+            
+            # Train and predict
+            cv_model.fit(X_cv_train_scaled, y_cv_train)
+            cv_pred = cv_model.predict(X_cv_val_scaled)
+            cv_scores.append(r2_score(y_cv_val, cv_pred))
+            
+        except Exception as e:
+            # If model recreation fails, skip this fold
+            print(f"Warning: Cross-validation fold failed: {str(e)}")
+            continue
+    
+    # Additional metrics
+    train_mape = np.mean(np.abs((train_actual - train_pred) / np.maximum(np.abs(train_actual), 1e-8))) * 100
+    test_mape = np.mean(np.abs((test_actual - test_pred) / np.maximum(np.abs(test_actual), 1e-8))) * 100
+    
+    # Directional accuracy (percentage of correct direction predictions)
+    if len(train_actual) > 1:
+        train_actual_direction = np.diff(train_actual) > 0
+        train_pred_direction = np.diff(train_pred) > 0
+        train_directional_accuracy = np.mean(train_actual_direction == train_pred_direction) * 100
+    else:
+        train_directional_accuracy = 0
+    
+    if len(test_actual) > 1:
+        test_actual_direction = np.diff(test_actual) > 0
+        test_pred_direction = np.diff(test_pred) > 0
+        test_directional_accuracy = np.mean(test_actual_direction == test_pred_direction) * 100
+    else:
+        test_directional_accuracy = 0
+    
+    return {
+        'train_metrics': {
+            'rmse': float(train_rmse),
+            'mae': float(train_mae),
+            'r2': float(train_r2),
+            'information_ratio': float(train_info_ratio),
+            'mape': float(train_mape),
+            'directional_accuracy': float(train_directional_accuracy),
+            'error_std': float(train_error_std),
+            'mean_abs_error': float(train_mean_abs_error)
+        },
+        'test_metrics': {
+            'rmse': float(test_rmse),
+            'mae': float(test_mae),
+            'r2': float(test_r2),
+            'information_ratio': float(test_info_ratio),
+            'mape': float(test_mape),
+            'directional_accuracy': float(test_directional_accuracy),
+            'error_std': float(test_error_std),
+            'mean_abs_error': float(test_mean_abs_error)
+        },
+        'cross_validation': {
+            'cv_r2_mean': float(np.mean(cv_scores)) if cv_scores else 0.0,
+            'cv_r2_std': float(np.std(cv_scores)) if cv_scores else 0.0,
+            'cv_scores': [float(score) for score in cv_scores],
+            'cv_folds_completed': len(cv_scores)
+        }
+    }
+
+
+def save_model_artifacts(
+    model,
+    model_data: dict,
+    predictions_data: dict,
+    metrics: dict,
+    feature_importance: pd.DataFrame,
+    symbol: str,
+    model_type: str,
+    model_params: dict,
+    target_days: int,
+    save_model: bool = True,
+    save_predictions: bool = True
+) -> dict:
+    """
+    Universal model artifact saving with standardized naming conventions.
+    
+    Saves trained models, comprehensive results, and prediction data with consistent
+    file naming and structure. Works with any model type and automatically handles
+    serialization, JSON formatting, and CSV exports.
+    
+    Args:
+        model: Trained model instance (any serializable model)
+        model_data (dict): Prepared model data dictionary
+        predictions_data (dict): Predictions and actuals dictionary
+        metrics (dict): Comprehensive performance metrics
+        feature_importance (pd.DataFrame): Feature importance rankings
+        symbol (str): Stock symbol for file naming
+        model_type (str): Model type identifier ('xgboost', 'random_forest', etc.)
+        model_params (dict): Model parameters for metadata
+        target_days (int): Prediction horizon for metadata
+        save_model (bool): Whether to save model pickle file
+        save_predictions (bool): Whether to save predictions CSV
+    
+    Returns:
+        dict: Dictionary with saved filenames:
+            - 'model': Model pickle filename (or None)
+            - 'results': Results JSON filename (or None)  
+            - 'predictions': Predictions CSV filename (or None)
+    
+    File Naming Convention:
+        - Models: "train_{model_type}_price_predictor_{symbol}_model_{timestamp}.pkl"
+        - Results: "train_{model_type}_price_predictor_{symbol}_results_{timestamp}.json"
+        - Predictions: "{model_type}_predictions_{symbol}_{timestamp}.csv"
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filenames = {'model': None, 'results': None, 'predictions': None}
+    
+    if save_model:
+        # Save model
+        model_filename = f"train_{model_type}_price_predictor_{symbol}_model_{timestamp}.pkl"
+        model_filepath = os.path.join(OUTPUT_DIR, model_filename)
+        with open(model_filepath, 'wb') as f:
+            pickle.dump({
+                'model': model,
+                'scaler': model_data['scaler'],
+                'feature_cols': model_data['feature_cols'],
+                'target_days': target_days,
+                'symbol': symbol,
+                'model_type': model_type
+            }, f)
+        filenames['model'] = model_filename
+        
+        # Save results
+        results = {
+            'symbol': symbol,
+            'model_type': model_type.replace('_', ' ').title(),
+            'target_days': target_days,
+            'data_source': model_data['data_source'],
+            'training_samples': len(model_data['X_train']),
+            'test_samples': len(model_data['X_test']),
+            'features_used': model_data['feature_cols'],
+            'model_params': model_params,
+            'performance': {
+                'train_metrics': metrics['train_metrics'],
+                'test_metrics': metrics['test_metrics'],
+                'cross_validation': metrics['cross_validation']
+            },
+            'feature_importance': feature_importance.to_dict('records'),
+            'timestamp': timestamp
+        }
+        
+        results_filename = f"train_{model_type}_price_predictor_{symbol}_results_{timestamp}.json"
+        results_filepath = os.path.join(OUTPUT_DIR, results_filename)
+        with open(results_filepath, 'w') as f:
+            json.dump(results, f, indent=2)
+        filenames['results'] = results_filename
+    
+    if save_predictions:
+        # Save predictions
+        train_df = pd.DataFrame({
+            'Date': predictions_data['train_dates'],
+            'Actual': predictions_data['train_actuals'],
+            'Predicted': predictions_data['train_predictions'],
+            'Set': 'Train'
+        }).set_index('Date')
+        
+        test_df = pd.DataFrame({
+            'Date': predictions_data['test_dates'],
+            'Actual': predictions_data['test_actuals'],
+            'Predicted': predictions_data['test_predictions'],
+            'Set': 'Test'
+        }).set_index('Date')
+        
+        # Combine both sets
+        combined_df = pd.concat([train_df, test_df])
+        combined_df['Error'] = combined_df['Predicted'] - combined_df['Actual']
+        combined_df['Absolute_Error'] = abs(combined_df['Error'])
+        combined_df['Percentage_Error'] = (combined_df['Error'] / np.maximum(abs(combined_df['Actual']), 1e-8)) * 100
+        
+        predictions_filename = f"{model_type}_predictions_{symbol}_{timestamp}.csv"
+        filepath = os.path.join(OUTPUT_DIR, predictions_filename)
+        combined_df.to_csv(filepath)
+        filenames['predictions'] = predictions_filename
+    
+    return filenames
+
+
+def generate_model_summary(
+    symbol: str,
+    model_type: str,
+    model_data: dict,
+    metrics: dict,
+    feature_importance: pd.DataFrame,
+    model_params: dict,
+    target_days: int,
+    filenames: dict
+) -> str:
+    """
+    Universal model training summary generator for all model types.
+    
+    Creates comprehensive, standardized training reports with performance metrics,
+    parameter details, feature importance, and actionable insights. Adapts display
+    based on model type while maintaining consistent structure.
+    
+    Args:
+        symbol (str): Stock symbol
+        model_type (str): Model type identifier  
+        model_data (dict): Prepared model data
+        metrics (dict): Performance metrics
+        feature_importance (pd.DataFrame): Feature rankings
+        model_params (dict): Model parameters
+        target_days (int): Prediction horizon
+        filenames (dict): Saved file references
+    
+    Returns:
+        str: Formatted comprehensive training summary report
+    """
+    train_metrics = metrics['train_metrics']
+    test_metrics = metrics['test_metrics']
+    cv_metrics = metrics['cross_validation']
+    
+    # Model-specific configuration details
+    model_display_name = model_type.replace('_', ' ').title()
+    model_icons = {
+        'xgboost': '🤖',
+        'random_forest': '🌲', 
+        'svr': '🎯',
+        'gradient_boosting': '📈',
+        'ridge_regression': '📊',
+        'extra_trees': '🌳'
+    }
+    model_icon = model_icons.get(model_type, '🔬')
+    
+    # Format model parameters
+    param_lines = []
+    for key, value in model_params.items():
+        if key in ['random_state', 'n_jobs']:  # Skip internal parameters
+            continue
+        param_lines.append(f"- {key.replace('_', ' ').title()}: {value if value is not None else 'Unlimited'}")
+    
+    summary = f"""train_{model_type}_price_predictor: Successfully trained {model_display_name} model for {symbol}:
+
+{model_icon} MODEL CONFIGURATION:
+- Algorithm: {model_display_name} Regressor
+- Symbol: {symbol}
+- Target: {target_days}-day ahead price prediction
+- Data Source: {model_data['data_source']}
+- Features: {len(model_data['feature_cols'])} technical indicators
+- Training Samples: {len(model_data['X_train'])}
+- Test Samples: {len(model_data['X_test'])}
+
+⚙️ HYPERPARAMETERS:
+{chr(10).join(param_lines) if param_lines else '- Using default parameters'}
+
+📊 COMPREHENSIVE PERFORMANCE METRICS:
+
+🎯 TRAIN SET PERFORMANCE:
+- RMSE: ${train_metrics['rmse']:.3f}
+- MAE: ${train_metrics['mae']:.3f}
+- R²: {train_metrics['r2']:.3f}
+- Information Ratio: {train_metrics['information_ratio']:.3f}
+- MAPE: {train_metrics['mape']:.2f}%
+- Directional Accuracy: {train_metrics['directional_accuracy']:.1f}%
+
+🎯 TEST SET PERFORMANCE:
+- RMSE: ${test_metrics['rmse']:.3f}
+- MAE: ${test_metrics['mae']:.3f}
+- R²: {test_metrics['r2']:.3f}
+- Information Ratio: {test_metrics['information_ratio']:.3f}
+- MAPE: {test_metrics['mape']:.2f}%
+- Directional Accuracy: {test_metrics['directional_accuracy']:.1f}%
+
+🔄 CROSS-VALIDATION SCORES:
+- Mean R²: {cv_metrics['cv_r2_mean']:.3f}
+- Std R²: {cv_metrics['cv_r2_std']:.3f}
+- Completed Folds: {cv_metrics['cv_folds_completed']}/3
+- Individual Scores: {[f"{score:.3f}" for score in cv_metrics['cv_scores']]}
+
+🎯 TOP 5 IMPORTANT FEATURES:
+{chr(10).join([f"  {i+1}. {row['feature']}: {row['importance']:.3f}" for i, row in feature_importance.head().iterrows()])}
+
+📁 FILES SAVED:
+- Model: {filenames['model'] if filenames['model'] else 'Not saved'}
+- Results: {filenames['results'] if filenames['results'] else 'Not saved'}
+- Predictions: {filenames['predictions'] if filenames['predictions'] else 'Not saved'}
+
+💡 MODEL INSIGHTS:
+- Overfitting Risk: {'High' if train_metrics['r2'] - test_metrics['r2'] > 0.1 else 'Low' if train_metrics['r2'] - test_metrics['r2'] < 0.05 else 'Moderate'}
+- Model Quality: {'Excellent' if test_metrics['r2'] > 0.8 else 'Good' if test_metrics['r2'] > 0.6 else 'Fair' if test_metrics['r2'] > 0.4 else 'Poor'}
+- Prediction Accuracy: ±${test_metrics['mae']:.2f} average error on test set
+- Direction Prediction: {test_metrics['directional_accuracy']:.1f}% correct trend predictions
+- Model Stability: {'High' if cv_metrics['cv_r2_std'] < 0.1 else 'Moderate' if cv_metrics['cv_r2_std'] < 0.2 else 'Low'}
+"""
+    
+    return summary
+
+
+def train_model_pipeline(
+    symbol: str,
+    model_type: str,
+    model_factory_func,
+    source_file: Optional[str] = None,
+    target_days: int = 1,
+    test_size: float = 0.2,
+    save_model: bool = True,
+    save_predictions: bool = True,
+    **model_params
+) -> str:
+    """
+    Universal machine learning model training pipeline.
+    
+    This is the core orchestration function that handles the complete model training
+    workflow for any scikit-learn compatible model. It provides a standardized,
+    scalable approach to training, evaluation, and artifact management.
+    
+    Pipeline Stages:
+    1. Data preparation and validation
+    2. Model creation and training  
+    3. Prediction generation
+    4. Comprehensive metrics assessment
+    5. Feature importance analysis
+    6. Artifact saving (model, results, predictions)
+    7. Summary report generation
+    
+    Scalability Features:
+    - Model-agnostic design works with any scikit-learn compatible model
+    - Generic parameter handling via factory function pattern
+    - Consistent evaluation metrics across all model types
+    - Standardized file naming and artifact structure
+    - Comprehensive error handling and validation
+    
+    Args:
+        symbol (str): Stock symbol for training (e.g., 'AAPL', 'TSLA')
+        
+        model_type (str): Model identifier for naming and classification
+                         Examples: 'xgboost', 'random_forest', 'svr', 'linear_regression'
+        
+        model_factory_func (callable): Function that creates model instance
+                                     Must accept **model_params and return fitted model
+                                     Example: lambda **p: XGBRegressor(**p)
+        
+        source_file (Optional[str]): Enhanced data file with technical indicators
+                                   If None, auto-detects latest enhanced file
+        
+        target_days (int): Prediction horizon in days (1-90 recommended)
+        
+        test_size (float): Test set proportion (0.1-0.3 recommended)
+        
+        save_model (bool): Whether to save trained model and results
+        
+        save_predictions (bool): Whether to save prediction data
+        
+        **model_params: Model-specific parameters passed to factory function
+                       Examples: n_estimators=100, max_depth=6, learning_rate=0.1
+    
+    Returns:
+        str: Comprehensive training summary with performance metrics,
+             parameter details, feature importance, and file locations
+    
+    Example Usage for AI Agents:
+        # XGBoost training
+        result = train_model_pipeline(
+            symbol="AAPL",
+            model_type="xgboost", 
+            model_factory_func=lambda **p: XGBRegressor(**p),
+            target_days=5,
+            n_estimators=200,
+            max_depth=8
+        )
+        
+        # Random Forest training  
+        result = train_model_pipeline(
+            symbol="TSLA",
+            model_type="random_forest",
+            model_factory_func=lambda **p: RandomForestRegressor(**p),
+            n_estimators=100,
+            max_depth=None
+        )
+    
+    Error Handling:
+        - Validates data availability and quality
+        - Handles model training failures gracefully
+        - Provides detailed error messages for debugging
+        - Continues with partial results if some steps fail
+    """
+    print(f"🔄 train_{model_type}_price_predictor: Starting {model_type.replace('_', ' ').title()} training for {symbol.upper()}...")
+    
+    try:
+        import numpy as np
+        
+        symbol = symbol.upper()
+        
+        # 1. Prepare data
+        model_data, error_msg = prepare_model_data(symbol, source_file, target_days, test_size)
+        if error_msg:
+            print(f"❌ train_{model_type}_price_predictor: {error_msg}")
+            return f"train_{model_type}_price_predictor: {error_msg}"
+        
+        # 2. Create and train model
+        model = model_factory_func(**model_params)
+        model.fit(model_data['X_train_scaled'], model_data['y_train'])
+        
+        # 3. Get predictions
+        predictions_data = get_train_test_predictions(model, model_data)
+        
+        # 4. Assess metrics
+        metrics = assess_model_metrics(predictions_data, model, model_data)
+        
+        # 5. Calculate feature importance (handle models without feature_importances_)
+        try:
+            if hasattr(model, 'feature_importances_'):
+                importance_values = model.feature_importances_
+            elif hasattr(model, 'coef_'):
+                # For linear models, use absolute coefficients
+                importance_values = np.abs(model.coef_)
+            else:
+                # Create dummy importance for models without feature importance
+                importance_values = np.ones(len(model_data['feature_cols'])) / len(model_data['feature_cols'])
+            
+            feature_importance = pd.DataFrame({
+                'feature': model_data['feature_cols'],
+                'importance': importance_values
+            }).sort_values('importance', ascending=False)
+        except Exception as e:
+            print(f"Warning: Could not calculate feature importance: {e}")
+            feature_importance = pd.DataFrame({
+                'feature': model_data['feature_cols'],
+                'importance': np.ones(len(model_data['feature_cols'])) / len(model_data['feature_cols'])
+            })
+        
+        # 6. Save artifacts
+        filenames = save_model_artifacts(
+            model, model_data, predictions_data, metrics, feature_importance,
+            symbol, model_type, model_params, target_days, save_model, save_predictions
+        )
+        
+        # 7. Generate summary
+        summary = generate_model_summary(
+            symbol, model_type, model_data, metrics, feature_importance,
+            model_params, target_days, filenames
+        )
+        
+        print(f"✅ train_{model_type}_price_predictor: Successfully trained {model_type.replace('_', ' ').title()} model for {symbol} (R²: {metrics['test_metrics']['r2']:.3f})")
+        return summary
+        
+    except Exception as e:
+        error_msg = f"train_{model_type}_price_predictor: Error training model for {symbol}: {str(e)}"
+        print(f"❌ train_{model_type}_price_predictor: {error_msg}")
+        return error_msg    
+
+
+
+
+
+
+
+
 @tool
 def backtest_model_strategy(
     symbol: str,
@@ -1212,6 +2616,8 @@ import xgboost as xgb
 import warnings
 warnings.filterwarnings('ignore')
 
+# Replace the existing train_xgboost_price_predictor and train_random_forest_price_predictor functions with these ultra-minimal versions:
+
 @tool
 def train_xgboost_price_predictor(
     symbol: str,
@@ -1221,237 +2627,118 @@ def train_xgboost_price_predictor(
     n_estimators: int = 100,
     max_depth: int = 6,
     learning_rate: float = 0.1,
-    save_model: bool = True
+    save_model: bool = True,
+    save_predictions: bool = True
 ) -> str:
     """
     Train an XGBoost model to predict stock prices using technical indicators.
     
-    Args:
-        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
-        source_file: Enhanced CSV file with technical indicators (if None, uses most recent)
-        target_days: Number of days ahead to predict (1 = next day, 5 = next week)
-        test_size: Proportion of data for testing (0.2 = 20%)
-        n_estimators: Number of boosting rounds
-        max_depth: Maximum tree depth
-        learning_rate: Learning rate for boosting
-        save_model: Whether to save the trained model
-        
-    Returns:
-        String with model performance metrics and file locations
-    """
-    print(f"🔄 train_xgboost_price_predictor: Starting XGBoost training for {symbol.upper()}...")
+    XGBoost (eXtreme Gradient Boosting) is a powerful ensemble learning method that uses
+    gradient boosting framework optimized for speed and performance. It's particularly
+    effective for structured/tabular data and handles non-linear relationships well.
     
-    try:
-        import numpy as np
+    Key Advantages:
+    - Excellent performance on structured data
+    - Built-in regularization prevents overfitting
+    - Handles missing values automatically
+    - Fast training with parallel processing
+    - Feature importance ranking included
+    
+    Best Use Cases:
+    - Short to medium-term trading (1-14 days)
+    - High-frequency data with complex patterns
+    - When maximum accuracy is priority
+    - Stocks with non-linear price relationships
+    
+    Args:
+        symbol (str): Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA', 'MSFT')
+                     Must have enhanced technical indicators data available
         
-        symbol = symbol.upper()
+        source_file (Optional[str]): Specific enhanced CSV file with technical indicators
+                                   If None, automatically uses most recent enhanced file
+                                   Should contain OHLCV + technical indicators
         
-        # Load enhanced data with technical indicators
-        if source_file:
-            if not source_file.endswith('.csv'):
-                source_file += '.csv'
-            filepath = os.path.join(OUTPUT_DIR, source_file)
-            if not os.path.exists(filepath):
-                result = f"train_xgboost_price_predictor: Source file '{source_file}' not found."
-                print(f"❌ train_xgboost_price_predictor: {result}")
-                return result
-            data = pd.read_csv(filepath, index_col=0, parse_dates=True)
-            data_source = f"file: {source_file}"
-        else:
-            # Find most recent enhanced data file
-            enhanced_files = [f for f in os.listdir(OUTPUT_DIR) if 
-                            f.startswith(f"apply_technical_indicators_and_transformations_{symbol}_") and f.endswith('.csv')]
-            if enhanced_files:
-                latest_file = max(enhanced_files, key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
-                filepath = os.path.join(OUTPUT_DIR, latest_file)
-                data = pd.read_csv(filepath, index_col=0, parse_dates=True)
-                data_source = f"enhanced file: {latest_file}"
-            else:
-                result = f"train_xgboost_price_predictor: No enhanced data files found for {symbol}. Please run technical indicators first."
-                print(f"❌ train_xgboost_price_predictor: {result}")
-                return result
+        target_days (int): Number of days ahead to predict
+                          - 1: Next day (day trading) - RECOMMENDED
+                          - 3-5: Short-term swing trading
+                          - 7-14: Medium-term trading
+                          - 30+: Long-term (may be less accurate)
         
-        if data.empty or len(data) < 50:
-            result = f"train_xgboost_price_predictor: Insufficient data for {symbol}. Need at least 50 records."
-            print(f"❌ train_xgboost_price_predictor: {result}")
-            return result
+        test_size (float): Proportion of data for testing (0.1-0.3)
+                          0.2 = 20% test, 80% train (RECOMMENDED)
+                          Larger test sets = more reliable validation
         
-        # Prepare features and target
-        # Target: future price (shifted by target_days)
-        data['Target'] = data['Close'].shift(-target_days)
+        n_estimators (int): Number of boosting rounds/trees
+                           - 50-100: Fast training, may underfit
+                           - 100-200: Good balance (RECOMMENDED)
+                           - 200-500: High accuracy, slower training
+                           - 500+: Risk of overfitting
         
-        # Select feature columns (exclude basic OHLCV and target)
-        exclude_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'Dividends', 'Stock Splits', 'Target']
-        feature_cols = [col for col in data.columns if col not in exclude_cols and not data[col].isnull().all()]
+        max_depth (int): Maximum depth of each tree
+                        - 3-6: Conservative, less overfitting (RECOMMENDED)
+                        - 6-10: More complex patterns
+                        - 10+: High risk of overfitting
         
-        if len(feature_cols) < 3:
-            result = f"train_xgboost_price_predictor: Insufficient technical indicators. Found only {len(feature_cols)} features. Need at least 3."
-            print(f"❌ train_xgboost_price_predictor: {result}")
-            return result
+        learning_rate (float): Step size shrinkage to prevent overfitting
+                              - 0.01-0.05: Very conservative, needs more estimators
+                              - 0.1: Good default balance (RECOMMENDED)
+                              - 0.2-0.3: Aggressive learning
+                              - 0.3+: High risk of instability
         
-        # Remove rows with NaN values
-        model_data = data[feature_cols + ['Target']].dropna()
+        save_model (bool): Whether to save trained model (.pkl) and results (.json)
+                          TRUE RECOMMENDED for analysis and backtesting
         
-        if len(model_data) < 30:
-            result = f"train_xgboost_price_predictor: Insufficient clean data after removing NaN values. Only {len(model_data)} records available."
-            print(f"❌ train_xgboost_price_predictor: {result}")
-            return result
+        save_predictions (bool): Whether to save train/test predictions to CSV
+                               TRUE RECOMMENDED for detailed analysis
+    
+    Returns:
+        str: Comprehensive training report including:
+             - Model configuration and parameters
+             - Performance metrics (RMSE, MAE, R², Information Ratio)
+             - Cross-validation scores
+             - Feature importance rankings
+             - Model quality assessment and insights
+             - File locations for saved artifacts
+    
+    Example Usage for AI Agents:
+        # Conservative day trading model
+        result = train_xgboost_price_predictor("AAPL", target_days=1, n_estimators=100, max_depth=3, learning_rate=0.05)
         
-        X = model_data[feature_cols]
-        y = model_data['Target']
+        # Aggressive short-term model
+        result = train_xgboost_price_predictor("TSLA", target_days=3, n_estimators=200, max_depth=8, learning_rate=0.2)
         
-        # Time series split for more realistic evaluation
-        tscv = TimeSeriesSplit(n_splits=3)
-        cv_scores = []
-        
-        # Also do a simple train-test split
-        split_idx = int(len(X) * (1 - test_size))
-        X_train, X_test = X[:split_idx], X[split_idx:]
-        y_train, y_test = y[:split_idx], y[split_idx:]
-        
-        # Scale features
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
-        
-        # Train XGBoost model
-        model = xgb.XGBRegressor(
+        # Quick prototyping
+        result = train_xgboost_price_predictor("GOOGL")  # Uses all defaults
+    
+    AI Agent Decision Guidelines:
+        - For volatile stocks (TSLA, MEME): Use lower learning_rate (0.05-0.1), more estimators
+        - For stable stocks (AAPL, MSFT): Standard parameters work well
+        - For day trading: target_days=1, max_depth=3-6
+        - For swing trading: target_days=5-7, max_depth=6-10
+        - Always enable save_model=True for backtesting capability
+    """
+    def create_xgboost_model(n_estimators, max_depth, learning_rate, **kwargs):
+        return xgb.XGBRegressor(
             n_estimators=n_estimators,
             max_depth=max_depth,
             learning_rate=learning_rate,
             random_state=42,
             n_jobs=-1
         )
-        
-        model.fit(X_train_scaled, y_train)
-        
-        # Make predictions
-        train_pred = model.predict(X_train_scaled)
-        test_pred = model.predict(X_test_scaled)
-        
-        # Calculate metrics
-        train_rmse = np.sqrt(mean_squared_error(y_train, train_pred))
-        test_rmse = np.sqrt(mean_squared_error(y_test, test_pred))
-        train_mae = mean_absolute_error(y_train, train_pred)
-        test_mae = mean_absolute_error(y_test, test_pred)
-        train_r2 = r2_score(y_train, train_pred)
-        test_r2 = r2_score(y_test, test_pred)
-        
-        # Cross-validation scores
-        for train_idx, val_idx in tscv.split(X):
-            X_cv_train, X_cv_val = X.iloc[train_idx], X.iloc[val_idx]
-            y_cv_train, y_cv_val = y.iloc[train_idx], y.iloc[val_idx]
-            
-            X_cv_train_scaled = scaler.fit_transform(X_cv_train)
-            X_cv_val_scaled = scaler.transform(X_cv_val)
-            
-            cv_model = xgb.XGBRegressor(n_estimators=n_estimators, max_depth=max_depth, 
-                                     learning_rate=learning_rate, random_state=42)
-            cv_model.fit(X_cv_train_scaled, y_cv_train)
-            cv_pred = cv_model.predict(X_cv_val_scaled)
-            cv_scores.append(r2_score(y_cv_val, cv_pred))
-        
-        # Feature importance
-        feature_importance = pd.DataFrame({
-            'feature': feature_cols,
-            'importance': model.feature_importances_
-        }).sort_values('importance', ascending=False)
-        
-        # Save model and results if requested
-        model_filename = None
-        results_filename = None
-        if save_model:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            # Save model
-            model_filename = f"train_xgboost_price_predictor_{symbol}_model_{timestamp}.pkl"
-            model_filepath = os.path.join(OUTPUT_DIR, model_filename)
-            with open(model_filepath, 'wb') as f:
-                pickle.dump({
-                    'model': model,
-                    'scaler': scaler,
-                    'feature_cols': feature_cols,
-                    'target_days': target_days,
-                    'symbol': symbol
-                }, f)
-            
-            # Save results
-            results = {
-                'symbol': symbol,
-                'target_days': target_days,
-                'data_source': data_source,
-                'training_samples': len(X_train),
-                'test_samples': len(X_test),
-                'features_used': feature_cols,
-                'model_params': {
-                    'n_estimators': n_estimators,
-                    'max_depth': max_depth,
-                    'learning_rate': learning_rate
-                },
-                'performance': {
-                    'train_rmse': float(train_rmse),
-                    'test_rmse': float(test_rmse),
-                    'train_mae': float(train_mae),
-                    'test_mae': float(test_mae),
-                    'train_r2': float(train_r2),
-                    'test_r2': float(test_r2),
-                    'cv_r2_mean': float(np.mean(cv_scores)),
-                    'cv_r2_std': float(np.std(cv_scores))
-                },
-                'feature_importance': feature_importance.to_dict('records')
-            }
-            
-            results_filename = f"train_xgboost_price_predictor_{symbol}_results_{timestamp}.json"
-            results_filepath = os.path.join(OUTPUT_DIR, results_filename)
-            with open(results_filepath, 'w') as f:
-                json.dump(results, f, indent=2)
-        
-        # Create summary
-        summary = f"""train_xgboost_price_predictor: Successfully trained XGBoost model for {symbol}:
-
-🤖 MODEL CONFIGURATION:
-- Algorithm: XGBoost Regressor
-- Symbol: {symbol}
-- Target: {target_days}-day ahead price prediction
-- Data Source: {data_source}
-- Features: {len(feature_cols)} technical indicators
-- Training Samples: {len(X_train)}
-- Test Samples: {len(X_test)}
-
-⚙️ HYPERPARAMETERS:
-- N Estimators: {n_estimators}
-- Max Depth: {max_depth}
-- Learning Rate: {learning_rate}
-
-📊 MODEL PERFORMANCE:
-- Training RMSE: ${train_rmse:.3f}
-- Test RMSE: ${test_rmse:.3f}
-- Training MAE: ${train_mae:.3f}
-- Test MAE: ${test_mae:.3f}
-- Training R²: {train_r2:.3f}
-- Test R²: {test_r2:.3f}
-- Cross-Val R²: {np.mean(cv_scores):.3f} (±{np.std(cv_scores):.3f})
-
-🎯 TOP 5 IMPORTANT FEATURES:
-{chr(10).join([f"  {i+1}. {row['feature']}: {row['importance']:.3f}" for i, row in feature_importance.head().iterrows()])}
-
-📁 FILES SAVED:
-- Model: {model_filename if model_filename else 'Not saved'}
-- Results: {results_filename if results_filename else 'Not saved'}
-
-💡 MODEL INSIGHTS:
-- Overfitting Risk: {'High' if train_r2 - test_r2 > 0.1 else 'Low' if train_r2 - test_r2 < 0.05 else 'Moderate'}
-- Model Quality: {'Excellent' if test_r2 > 0.8 else 'Good' if test_r2 > 0.6 else 'Fair' if test_r2 > 0.4 else 'Poor'}
-- Prediction Accuracy: ±${test_mae:.2f} average error on test set
-"""
-        
-        print(f"✅ train_xgboost_price_predictor: Successfully trained XGBoost model for {symbol} (R²: {test_r2:.3f})")
-        return summary
-        
-    except Exception as e:
-        error_msg = f"train_xgboost_price_predictor: Error training model for {symbol}: {str(e)}"
-        print(f"❌ train_xgboost_price_predictor: {error_msg}")
-        return error_msg
+    
+    return train_model_pipeline(
+        symbol=symbol,
+        model_type='xgboost',
+        model_factory_func=create_xgboost_model,
+        source_file=source_file,
+        target_days=target_days,
+        test_size=test_size,
+        save_model=save_model,
+        save_predictions=save_predictions,
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        learning_rate=learning_rate
+    )
 
 
 @tool
@@ -1463,236 +2750,351 @@ def train_random_forest_price_predictor(
     n_estimators: int = 100,
     max_depth: Optional[int] = None,
     min_samples_split: int = 2,
-    save_model: bool = True
+    save_model: bool = True,
+    save_predictions: bool = True
 ) -> str:
     """
     Train a Random Forest model to predict stock prices using technical indicators.
     
-    Args:
-        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
-        source_file: Enhanced CSV file with technical indicators (if None, uses most recent)
-        target_days: Number of days ahead to predict (1 = next day, 5 = next week)
-        test_size: Proportion of data for testing (0.2 = 20%)
-        n_estimators: Number of trees in the forest
-        max_depth: Maximum depth of trees (None = unlimited)
-        min_samples_split: Minimum samples required to split a node
-        save_model: Whether to save the trained model
-        
-    Returns:
-        String with model performance metrics and file locations
-    """
-    print(f"🔄 train_random_forest_price_predictor: Starting Random Forest training for {symbol.upper()}...")
+    Random Forest is a robust ensemble learning method that combines multiple decision
+    trees using bootstrap aggregating (bagging). It provides excellent stability,
+    interpretability, and resistance to overfitting.
     
-    try:
-        symbol = symbol.upper()
+    Key Advantages:
+    - Highly robust and stable predictions
+    - Less prone to overfitting than single trees
+    - Handles noisy data well
+    - Provides reliable feature importance
+    - Works well with default parameters
+    - Good for various prediction horizons
+    
+    Best Use Cases:
+    - Medium to long-term predictions (7-30+ days)
+    - When model stability is more important than peak accuracy
+    - Noisy or inconsistent market conditions
+    - When interpretability is important
+    - Conservative trading strategies
+    
+    Args:
+        symbol (str): Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA', 'MSFT')
+                     Must have enhanced technical indicators data available
         
-        # Load enhanced data with technical indicators using read_csv_data functionality
-        if source_file:
-            if not source_file.endswith('.csv'):
-                source_file += '.csv'
-            filepath = os.path.join(OUTPUT_DIR, source_file)
-            if not os.path.exists(filepath):
-                result = f"train_random_forest_price_predictor: Source file '{source_file}' not found."
-                print(f"❌ train_random_forest_price_predictor: {result}")
-                return result
-            data = pd.read_csv(filepath, index_col=0, parse_dates=True)
-            data_source = f"file: {source_file}"
-        else:
-            # Find most recent enhanced data file
-            enhanced_files = [f for f in os.listdir(OUTPUT_DIR) if 
-                            f.startswith(f"apply_technical_indicators_and_transformations_{symbol}_") and f.endswith('.csv')]
-            if enhanced_files:
-                latest_file = max(enhanced_files, key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
-                filepath = os.path.join(OUTPUT_DIR, latest_file)
-                data = pd.read_csv(filepath, index_col=0, parse_dates=True)
-                data_source = f"enhanced file: {latest_file}"
-            else:
-                result = f"train_random_forest_price_predictor: No enhanced data files found for {symbol}. Please run technical indicators first."
-                print(f"❌ train_random_forest_price_predictor: {result}")
-                return result
+        source_file (Optional[str]): Specific enhanced CSV file with technical indicators
+                                   If None, automatically uses most recent enhanced file
+                                   Should contain OHLCV + technical indicators
         
-        if data.empty or len(data) < 50:
-            result = f"train_random_forest_price_predictor: Insufficient data for {symbol}. Need at least 50 records."
-            print(f"❌ train_random_forest_price_predictor: {result}")
-            return result
+        target_days (int): Number of days ahead to predict
+                          - 1: Next day prediction
+                          - 7: Next week (RECOMMENDED for Random Forest)
+                          - 14: Two weeks ahead
+                          - 30: Next month (good performance)
         
-        # Prepare features and target
-        data['Target'] = data['Close'].shift(-target_days)
+        test_size (float): Proportion of data for testing (0.1-0.3)
+                          0.2 = 20% test, 80% train (RECOMMENDED)
         
-        # Select feature columns
-        exclude_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'Dividends', 'Stock Splits', 'Target']
-        feature_cols = [col for col in data.columns if col not in exclude_cols and not data[col].isnull().all()]
+        n_estimators (int): Number of trees in the forest
+                           - 50-100: Fast training, good for prototyping
+                           - 100-200: Excellent balance (RECOMMENDED)
+                           - 200-500: Marginal improvements, slower training
+                           - 500+: Diminishing returns
         
-        if len(feature_cols) < 3:
-            result = f"train_random_forest_price_predictor: Insufficient technical indicators. Found only {len(feature_cols)} features."
-            print(f"❌ train_random_forest_price_predictor: {result}")
-            return result
+        max_depth (Optional[int]): Maximum depth of trees
+                                  - None: Unlimited depth (RECOMMENDED - Random Forest handles this well)
+                                  - 10-20: Conservative depth limiting
+                                  - 5-10: Very conservative, may underfit
         
-        # Remove rows with NaN values
-        model_data = data[feature_cols + ['Target']].dropna()
+        min_samples_split (int): Minimum samples required to split internal node
+                                - 2: Maximum granularity (RECOMMENDED)
+                                - 5-10: More conservative, prevents overfitting
+                                - 10+: Very conservative, may underfit
         
-        if len(model_data) < 30:
-            result = f"train_random_forest_price_predictor: Insufficient clean data. Only {len(model_data)} records available."
-            print(f"❌ train_random_forest_price_predictor: {result}")
-            return result
+        save_model (bool): Whether to save trained model (.pkl) and results (.json)
+                          TRUE RECOMMENDED for analysis and backtesting
         
-        X = model_data[feature_cols]
-        y = model_data['Target']
+        save_predictions (bool): Whether to save train/test predictions to CSV
+                               TRUE RECOMMENDED for detailed analysis
+    
+    Returns:
+        str: Comprehensive training report including:
+             - Model configuration and parameters
+             - Performance metrics (RMSE, MAE, R², Information Ratio)
+             - Cross-validation scores
+             - Feature importance rankings
+             - Model quality assessment and insights
+             - File locations for saved artifacts
+    
+    Example Usage for AI Agents:
+        # Conservative long-term model
+        result = train_random_forest_price_predictor("AAPL", target_days=14, n_estimators=200)
         
-        # Time series split
-        tscv = TimeSeriesSplit(n_splits=3)
-        cv_scores = []
+        # Quick swing trading model
+        result = train_random_forest_price_predictor("MSFT", target_days=7, n_estimators=100)
         
-        # Train-test split
-        split_idx = int(len(X) * (1 - test_size))
-        X_train, X_test = X[:split_idx], X[split_idx:]
-        y_train, y_test = y[:split_idx], y[split_idx:]
+        # High-stability model for volatile stock
+        result = train_random_forest_price_predictor("TSLA", target_days=30, n_estimators=300, min_samples_split=10)
         
-        # Scale features
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
-        
-        # Train Random Forest model
-        model = RandomForestRegressor(
+        # Default parameters (good starting point)
+        result = train_random_forest_price_predictor("GOOGL")
+    
+    AI Agent Decision Guidelines:
+        - For stable predictions: Use Random Forest over XGBoost
+        - For longer horizons (>7 days): Random Forest often outperforms
+        - For volatile markets: Increase n_estimators, increase min_samples_split
+        - For conservative trading: Use max_depth=15, min_samples_split=5
+        - For diversified portfolios: Random Forest provides more consistent results
+        - Default parameters (max_depth=None) work well in most cases
+    """
+    def create_random_forest_model(n_estimators, max_depth, min_samples_split, **kwargs):
+        return RandomForestRegressor(
             n_estimators=n_estimators,
             max_depth=max_depth,
             min_samples_split=min_samples_split,
             random_state=42,
             n_jobs=-1
         )
-        
-        model.fit(X_train_scaled, y_train)
-        
-        # Make predictions
-        train_pred = model.predict(X_train_scaled)
-        test_pred = model.predict(X_test_scaled)
-        
-        # Calculate metrics
-        train_rmse = np.sqrt(mean_squared_error(y_train, train_pred))
-        test_rmse = np.sqrt(mean_squared_error(y_test, test_pred))
-        train_mae = mean_absolute_error(y_train, train_pred)
-        test_mae = mean_absolute_error(y_test, test_pred)
-        train_r2 = r2_score(y_train, train_pred)
-        test_r2 = r2_score(y_test, test_pred)
-        
-        # Cross-validation
-        for train_idx, val_idx in tscv.split(X):
-            X_cv_train, X_cv_val = X.iloc[train_idx], X.iloc[val_idx]
-            y_cv_train, y_cv_val = y.iloc[train_idx], y.iloc[val_idx]
-            
-            X_cv_train_scaled = scaler.fit_transform(X_cv_train)
-            X_cv_val_scaled = scaler.transform(X_cv_val)
-            
-            cv_model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth,
-                                          min_samples_split=min_samples_split, random_state=42)
-            cv_model.fit(X_cv_train_scaled, y_cv_train)
-            cv_pred = cv_model.predict(X_cv_val_scaled)
-            cv_scores.append(r2_score(y_cv_val, cv_pred))
-        
-        # Feature importance
-        feature_importance = pd.DataFrame({
-            'feature': feature_cols,
-            'importance': model.feature_importances_
-        }).sort_values('importance', ascending=False)
-        
-        # Save model and results
-        model_filename = None
-        results_filename = None
-        if save_model:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            # Save model
-            model_filename = f"train_random_forest_price_predictor_{symbol}_model_{timestamp}.pkl"
-            model_filepath = os.path.join(OUTPUT_DIR, model_filename)
-            with open(model_filepath, 'wb') as f:
-                pickle.dump({
-                    'model': model,
-                    'scaler': scaler,
-                    'feature_cols': feature_cols,
-                    'target_days': target_days,
-                    'symbol': symbol
-                }, f)
-            
-            # Save results
-            results = {
-                'symbol': symbol,
-                'target_days': target_days,
-                'data_source': data_source,
-                'training_samples': len(X_train),
-                'test_samples': len(X_test),
-                'features_used': feature_cols,
-                'model_params': {
-                    'n_estimators': n_estimators,
-                    'max_depth': max_depth,
-                    'min_samples_split': min_samples_split
-                },
-                'performance': {
-                    'train_rmse': float(train_rmse),
-                    'test_rmse': float(test_rmse),
-                    'train_mae': float(train_mae),
-                    'test_mae': float(test_mae),
-                    'train_r2': float(train_r2),
-                    'test_r2': float(test_r2),
-                    'cv_r2_mean': float(np.mean(cv_scores)),
-                    'cv_r2_std': float(np.std(cv_scores))
-                },
-                'feature_importance': feature_importance.to_dict('records')
-            }
-            
-            results_filename = f"train_random_forest_price_predictor_{symbol}_results_{timestamp}.json"
-            results_filepath = os.path.join(OUTPUT_DIR, results_filename)
-            with open(results_filepath, 'w') as f:
-                json.dump(results, f, indent=2)
-        
-        # Create summary
-        summary = f"""train_random_forest_price_predictor: Successfully trained Random Forest model for {symbol}:
-
-🌲 MODEL CONFIGURATION:
-- Algorithm: Random Forest Regressor
-- Symbol: {symbol}
-- Target: {target_days}-day ahead price prediction
-- Data Source: {data_source}
-- Features: {len(feature_cols)} technical indicators
-- Training Samples: {len(X_train)}
-- Test Samples: {len(X_test)}
-
-⚙️ HYPERPARAMETERS:
-- N Estimators: {n_estimators}
-- Max Depth: {max_depth if max_depth else 'Unlimited'}
-- Min Samples Split: {min_samples_split}
-
-📊 MODEL PERFORMANCE:
-- Training RMSE: ${train_rmse:.3f}
-- Test RMSE: ${test_rmse:.3f}
-- Training MAE: ${train_mae:.3f}
-- Test MAE: ${test_mae:.3f}
-- Training R²: {train_r2:.3f}
-- Test R²: {test_r2:.3f}
-- Cross-Val R²: {np.mean(cv_scores):.3f} (±{np.std(cv_scores):.3f})
-
-🎯 TOP 5 IMPORTANT FEATURES:
-{chr(10).join([f"  {i+1}. {row['feature']}: {row['importance']:.3f}" for i, row in feature_importance.head().iterrows()])}
-
-📁 FILES SAVED:
-- Model: {model_filename if model_filename else 'Not saved'}
-- Results: {results_filename if results_filename else 'Not saved'}
-
-💡 MODEL INSIGHTS:
-- Overfitting Risk: {'High' if train_r2 - test_r2 > 0.1 else 'Low' if train_r2 - test_r2 < 0.05 else 'Moderate'}
-- Model Quality: {'Excellent' if test_r2 > 0.8 else 'Good' if test_r2 > 0.6 else 'Fair' if test_r2 > 0.4 else 'Poor'}
-- Prediction Accuracy: ±${test_mae:.2f} average error on test set
-- Model Stability: {'High' if np.std(cv_scores) < 0.1 else 'Moderate' if np.std(cv_scores) < 0.2 else 'Low'}
-"""
-        
-        print(f"✅ train_random_forest_price_predictor: Successfully trained Random Forest model for {symbol} (R²: {test_r2:.3f})")
-        return summary
-        
-    except Exception as e:
-        error_msg = f"train_random_forest_price_predictor: Error training model for {symbol}: {str(e)}"
-        print(f"❌ train_random_forest_price_predictor: {error_msg}")
-        return error_msg
     
+    return train_model_pipeline(
+        symbol=symbol,
+        model_type='random_forest',
+        model_factory_func=create_random_forest_model,
+        source_file=source_file,
+        target_days=target_days,
+        test_size=test_size,
+        save_model=save_model,
+        save_predictions=save_predictions,
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        min_samples_split=min_samples_split
+    )
+    
+
+
+# =============================================================================
+# EXAMPLE: ADDING NEW MODELS IS NOW TRIVIAL (ZERO DUPLICATION)
+# =============================================================================
+
+# Example 1: Support Vector Regression - Only 15 lines of code!
+@tool
+def train_svr_price_predictor(
+    symbol: str,
+    source_file: Optional[str] = None,
+    target_days: int = 1,
+    test_size: float = 0.2,
+    C: float = 1.0,
+    gamma: str = 'scale',
+    kernel: str = 'rbf',
+    save_model: bool = True,
+    save_predictions: bool = True
+) -> str:
+    """
+    Train Support Vector Regression model for stock price prediction.
+    
+    SVR uses support vector machines for regression, finding optimal hyperplane
+    that best fits the data with maximum margin. Excellent for complex non-linear
+    relationships and robust to outliers.
+    
+    Best Use Cases:
+    - Complex non-linear patterns
+    - Robust predictions with outliers
+    - When you have sufficient computational resources
+    - Medium-term predictions (3-14 days)
+    
+    Parameter Guidelines:
+        C: Regularization parameter (0.1-10)
+           - Lower values: More regularization, simpler model
+           - Higher values: Less regularization, more complex model
+        
+        gamma: Kernel coefficient ('scale', 'auto', or float)
+               - 'scale': 1/(n_features * X.var()) - RECOMMENDED
+               - 'auto': 1/n_features
+               - Custom float: Manual control
+        
+        kernel: Kernel type ('rbf', 'linear', 'poly')
+               - 'rbf': Radial basis function - RECOMMENDED for most cases
+               - 'linear': Linear relationships only
+               - 'poly': Polynomial relationships
+    """
+    def create_svr_model(C, gamma, kernel, **kwargs):
+        from sklearn.svm import SVR
+        return SVR(C=C, gamma=gamma, kernel=kernel)
+    
+    return train_model_pipeline(
+        symbol=symbol,
+        model_type='svr',
+        model_factory_func=create_svr_model,
+        source_file=source_file,
+        target_days=target_days,
+        test_size=test_size,
+        save_model=save_model,
+        save_predictions=save_predictions,
+        C=C,
+        gamma=gamma,
+        kernel=kernel
+    )
+
+
+# Example 2: Gradient Boosting Regressor - Another 15 lines!
+@tool
+def train_gradient_boosting_price_predictor(
+    symbol: str,
+    source_file: Optional[str] = None,
+    target_days: int = 1,
+    test_size: float = 0.2,
+    n_estimators: int = 100,
+    learning_rate: float = 0.1,
+    max_depth: int = 3,
+    save_model: bool = True,
+    save_predictions: bool = True
+) -> str:
+    """
+    Train Gradient Boosting model for stock price prediction.
+    
+    Gradient Boosting builds models sequentially, with each new model correcting
+    errors from previous models. Similar to XGBoost but uses scikit-learn implementation.
+    
+    Best Use Cases:
+    - Alternative to XGBoost with scikit-learn ecosystem
+    - Sequential error correction approach
+    - Good balance of accuracy and interpretability
+    - Short to medium-term predictions
+    
+    Parameter Guidelines:
+        n_estimators: Number of boosting stages (50-200 recommended)
+        learning_rate: Learning rate shrinks contribution (0.01-0.2)
+        max_depth: Maximum depth of trees (3-8 recommended)
+    """
+    def create_gb_model(n_estimators, learning_rate, max_depth, **kwargs):
+        from sklearn.ensemble import GradientBoostingRegressor
+        return GradientBoostingRegressor(
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+            max_depth=max_depth,
+            random_state=42
+        )
+    
+    return train_model_pipeline(
+        symbol=symbol,
+        model_type='gradient_boosting',
+        model_factory_func=create_gb_model,
+        source_file=source_file,
+        target_days=target_days,
+        test_size=test_size,
+        save_model=save_model,
+        save_predictions=save_predictions,
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth
+    )
+
+
+# Example 3: Linear Regression with Ridge Regularization
+@tool
+def train_ridge_regression_price_predictor(
+    symbol: str,
+    source_file: Optional[str] = None,
+    target_days: int = 1,
+    test_size: float = 0.2,
+    alpha: float = 1.0,
+    fit_intercept: bool = True,
+    save_model: bool = True,
+    save_predictions: bool = True
+) -> str:
+    """
+    Train Ridge Regression model for stock price prediction.
+    
+    Ridge Regression is linear regression with L2 regularization, preventing
+    overfitting by penalizing large coefficients. Excellent baseline model
+    and provides interpretable linear relationships.
+    
+    Best Use Cases:
+    - Baseline model for comparison
+    - When linear relationships are expected
+    - High interpretability requirements
+    - Quick prototyping and testing
+    - When you have limited training data
+    
+    Parameter Guidelines:
+        alpha: Regularization strength (0.1-10)
+               - Higher values: More regularization
+               - Lower values: Less regularization
+        fit_intercept: Whether to fit intercept term (usually True)
+    """
+    def create_ridge_model(alpha, fit_intercept, **kwargs):
+        from sklearn.linear_model import Ridge
+        
+        # Add dummy feature_importances_ for consistency
+        class RidgeWithImportance(Ridge):
+            @property
+            def feature_importances_(self):
+                import numpy as np
+                return np.abs(self.coef_) / np.sum(np.abs(self.coef_))
+        
+        return RidgeWithImportance(alpha=alpha, fit_intercept=fit_intercept)
+    
+    return train_model_pipeline(
+        symbol=symbol,
+        model_type='ridge_regression',
+        model_factory_func=create_ridge_model,
+        source_file=source_file,
+        target_days=target_days,
+        test_size=test_size,
+        save_model=save_model,
+        save_predictions=save_predictions,
+        alpha=alpha,
+        fit_intercept=fit_intercept
+    )
+
+
+# Example 4: Extra Trees Regressor (Extremely Randomized Trees)
+@tool
+def train_extra_trees_price_predictor(
+    symbol: str,
+    source_file: Optional[str] = None,
+    target_days: int = 1,
+    test_size: float = 0.2,
+    n_estimators: int = 100,
+    max_depth: Optional[int] = None,
+    min_samples_split: int = 2,
+    save_model: bool = True,
+    save_predictions: bool = True
+) -> str:
+    """
+    Train Extra Trees (Extremely Randomized Trees) model for stock price prediction.
+    
+    Extra Trees uses random thresholds for each feature rather than searching for
+    the best thresholds like Random Forest. This reduces variance and can provide
+    better generalization.
+    
+    Best Use Cases:
+    - Similar to Random Forest but with more randomization
+    - Good for reducing overfitting
+    - Faster training than Random Forest
+    - When you want more model diversity
+    """
+    def create_extra_trees_model(n_estimators, max_depth, min_samples_split, **kwargs):
+        from sklearn.ensemble import ExtraTreesRegressor
+        return ExtraTreesRegressor(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            random_state=42,
+            n_jobs=-1
+        )
+    
+    return train_model_pipeline(
+        symbol=symbol,
+        model_type='extra_trees',
+        model_factory_func=create_extra_trees_model,
+        source_file=source_file,
+        target_days=target_days,
+        test_size=test_size,
+        save_model=save_model,
+        save_predictions=save_predictions,
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        min_samples_split=min_samples_split
+    )
+
 
 @tool
 def debug_file_system(

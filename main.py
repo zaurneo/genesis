@@ -45,17 +45,25 @@ def main():
     print("Type 'exit', 'quit', or 'bye' to end the session.")
     print("=" * 50)
     
-    # Initial query to start the system
-    initial_query = """Get Apple stock data, create technical indicators, tain random forest model, backtest its results, analyze its performance, and create a summary report.
-    then transfer_to_human for more questions"""
-    print(f"\n🚀 Starting with initial query: '{initial_query}'")
+    # ENHANCED initial query showcasing new scalable ML capabilities
+    initial_query = """Get Apple stock data, apply technical indicators, then use the enhanced scalable ML system to:
+
+1. Get AI-assisted model parameter recommendations for short-term trading
+2. Train multiple models (XGBoost, Random Forest, SVR) using the zero-duplication pipeline
+3. Compare model performance and select the best approach
+4. Backtest the top models with different trading strategies
+5. Create comprehensive visualizations and analysis report
+
+Then transfer_to_human for more questions about the enhanced ML capabilities."""
+    
+    print(f"\n🚀 Starting with enhanced ML showcase: '{initial_query}'")
     
     # Initialize the conversation
     inputs = {
         "messages": [
             {
                 "role": "user", 
-                "content": f"Processing Query: '{initial_query}'"
+                "content": f"Processing Enhanced ML Query: '{initial_query}'"
             }         
         ]
     }
@@ -64,7 +72,7 @@ def main():
         try:
             # Run the graph until interruption or completion
             print("\n" + "="*50)
-            print("🔄 Running agent workflow...")
+            print("🔄 Running enhanced agent workflow...")
             print("="*50)
             
             for chunk in graph.stream(inputs, config=config, stream_mode="updates"):
@@ -87,13 +95,15 @@ def main():
                 print("\n" + "="*50)
                 print("💬 HUMAN INPUT REQUIRED")
                 print("="*50)
-                print("The system is ready for your questions or instructions.")
+                print("The enhanced ML system is ready for your questions or instructions.")
                 print("You can ask about:")
-                print("  • Stock analysis for any symbol")
-                print("  • Technical indicators and charts")
-                print("  • Machine learning predictions")
-                print("  • Backtesting strategies")
-                print("  • Comprehensive reports")
+                print("  • Enhanced scalable ML model training")
+                print("  • AI-assisted parameter selection and validation")
+                print("  • Multi-model comparison and ensemble analysis")
+                print("  • Advanced backtesting with multiple strategies")
+                print("  • Model selection guides and recommendations")
+                print("  • Zero-duplication architecture benefits")
+                print("  • Any stock analysis for any symbol")
                 print("Type 'exit', 'quit', or 'bye' to end the session.")
                 print("-" * 50)
                 
@@ -106,7 +116,7 @@ def main():
                 
                 # Check for exit commands
                 if user_input.lower() in ['exit', 'quit', 'bye', '']:
-                    print("\n👋 Thank you for using Genesis! Goodbye!")
+                    print("\n👋 Thank you for using Genesis Enhanced ML System! Goodbye!")
                     break
                 
                 # Continue the conversation with user input
@@ -128,9 +138,14 @@ def main():
             else:
                 # No interruption - workflow completed
                 print("\n" + "="*50)
-                print("✅ WORKFLOW COMPLETED")
+                print("✅ ENHANCED ML WORKFLOW COMPLETED")
                 print("="*50)
-                print("The analysis is complete. You can ask additional questions or exit.")
+                print("The enhanced analysis is complete. You can ask additional questions about:")
+                print("  • Model performance comparisons")
+                print("  • Parameter optimization insights")
+                print("  • Backtesting strategy effectiveness")
+                print("  • Adding new model types (SVR, Gradient Boosting, etc.)")
+                print("  • Scalable architecture benefits")
                 
                 # Get user input for next action
                 try:
@@ -141,7 +156,7 @@ def main():
                 
                 # Check for exit commands
                 if user_input.lower() in ['exit', 'quit', 'bye', '']:
-                    print("\n👋 Thank you for using Genesis! Goodbye!")
+                    print("\n👋 Thank you for using Genesis Enhanced ML System! Goodbye!")
                     break
                 
                 # Continue in same session but restart workflow with full context
