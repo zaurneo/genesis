@@ -24,6 +24,9 @@ from tools import (
     get_model_selection_guide,
     # Existing tools
     backtest_model_strategy,
+    # NEW: Multi-model backtesting tools
+    backtest_multiple_models,
+    visualize_model_comparison_backtesting,
     generate_comprehensive_html_report,
     visualize_backtesting_results
 )
@@ -68,7 +71,7 @@ stock_data_agent = create_react_agent(
 )
 
 
-# Stock Analyzer agent and node - ENHANCED with new scalable ML tools
+# Stock Analyzer agent and node - ENHANCED with new scalable ML tools and multi-model backtesting
 stock_analyzer_tools = [
     list_saved_stock_files,
     # Core enhanced ML training tools (using new pipeline)
@@ -84,7 +87,9 @@ stock_analyzer_tools = [
     validate_model_parameters,
     get_model_selection_guide,
     # Backtesting and analysis
-    backtest_model_strategy
+    backtest_model_strategy,
+    # NEW: Multi-model backtesting and comparison
+    backtest_multiple_models
 ]
 
 stock_analyzer_agent = create_react_agent(
@@ -98,13 +103,15 @@ stock_analyzer_agent = create_react_agent(
 )
 
 
-# Stock Reporter agent and node
+# Stock Reporter agent and node - ENHANCED with multi-model visualization
 stock_reporter_tools = [
     list_saved_stock_files,
     read_csv_data,
     save_text_to_file,
     visualize_stock_data,
     visualize_backtesting_results,
+    # NEW: Multi-model comparison visualization
+    visualize_model_comparison_backtesting,
     generate_comprehensive_html_report
 ]
 

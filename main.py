@@ -45,25 +45,30 @@ def main():
     print("Type 'exit', 'quit', or 'bye' to end the session.")
     print("=" * 50)
     
-    # ENHANCED initial query showcasing new scalable ML capabilities
-    initial_query = """Get Apple stock data, apply technical indicators, then use the enhanced scalable ML system to:
+    # ENHANCED initial query showcasing new multi-model backtesting capabilities
+    initial_query = """Get Apple stock data, apply technical indicators, then use the enhanced scalable ML system with multi-model capabilities to:
 
 1. Get AI-assisted model parameter recommendations for short-term trading
-2. Train multiple models (XGBoost, Random Forest, SVR) using the zero-duplication pipeline
-3. Compare model performance and select the best approach
-4. Backtest the top models with different trading strategies
-5. Create comprehensive visualizations and analysis report
+2. Train multiple models using different algorithms (XGBoost, Random Forest, SVR, etc.) with various parameter configurations
+3. Use the new backtest_multiple_models tool to compare all models simultaneously
+4. Identify best performers across different criteria (return, Sharpe ratio, drawdown)
+5. Create comprehensive multi-model comparison visualizations showing:
+   - Performance rankings across all models
+   - Parameter sensitivity analysis
+   - Risk-return scatter plots
+   - Model type effectiveness comparison
+6. Generate a comprehensive HTML report with all findings and model comparison insights
 
-Then transfer_to_human for more questions about the enhanced ML capabilities."""
+Then transfer_to_human for more questions about the enhanced multi-model ML capabilities."""
     
-    print(f"\n🚀 Starting with enhanced ML showcase: '{initial_query}'")
+    print(f"\n🚀 Starting with enhanced multi-model ML showcase: '{initial_query}'")
     
     # Initialize the conversation
     inputs = {
         "messages": [
             {
                 "role": "user", 
-                "content": f"Processing Enhanced ML Query: '{initial_query}'"
+                "content": f"Processing Enhanced Multi-Model ML Query: '{initial_query}'"
             }         
         ]
     }
@@ -72,7 +77,7 @@ Then transfer_to_human for more questions about the enhanced ML capabilities."""
         try:
             # Run the graph until interruption or completion
             print("\n" + "="*50)
-            print("🔄 Running enhanced agent workflow...")
+            print("🔄 Running enhanced multi-model agent workflow...")
             print("="*50)
             
             for chunk in graph.stream(inputs, config=config, stream_mode="updates"):
@@ -95,15 +100,18 @@ Then transfer_to_human for more questions about the enhanced ML capabilities."""
                 print("\n" + "="*50)
                 print("💬 HUMAN INPUT REQUIRED")
                 print("="*50)
-                print("The enhanced ML system is ready for your questions or instructions.")
+                print("The enhanced multi-model ML system is ready for your questions or instructions.")
                 print("You can ask about:")
-                print("  • Enhanced scalable ML model training")
+                print("  • Enhanced scalable ML model training with multiple algorithms")
+                print("  • Multi-model backtesting and performance comparison")
                 print("  • AI-assisted parameter selection and validation")
-                print("  • Multi-model comparison and ensemble analysis")
-                print("  • Advanced backtesting with multiple strategies")
-                print("  • Model selection guides and recommendations")
-                print("  • Zero-duplication architecture benefits")
-                print("  • Any stock analysis for any symbol")
+                print("  • Model ranking and selection based on different criteria")
+                print("  • Parameter sensitivity analysis across model types")
+                print("  • Risk-return optimization and model effectiveness")
+                print("  • Advanced visualization of model comparison results")
+                print("  • Zero-duplication architecture benefits and scalability")
+                print("  • Best model identification for different trading strategies")
+                print("  • Any stock analysis for any symbol with multi-model approach")
                 print("Type 'exit', 'quit', or 'bye' to end the session.")
                 print("-" * 50)
                 
@@ -116,7 +124,7 @@ Then transfer_to_human for more questions about the enhanced ML capabilities."""
                 
                 # Check for exit commands
                 if user_input.lower() in ['exit', 'quit', 'bye', '']:
-                    print("\n👋 Thank you for using Genesis Enhanced ML System! Goodbye!")
+                    print("\n👋 Thank you for using Genesis Enhanced Multi-Model ML System! Goodbye!")
                     break
                 
                 # Continue the conversation with user input
@@ -138,14 +146,17 @@ Then transfer_to_human for more questions about the enhanced ML capabilities."""
             else:
                 # No interruption - workflow completed
                 print("\n" + "="*50)
-                print("✅ ENHANCED ML WORKFLOW COMPLETED")
+                print("✅ ENHANCED MULTI-MODEL ML WORKFLOW COMPLETED")
                 print("="*50)
-                print("The enhanced analysis is complete. You can ask additional questions about:")
-                print("  • Model performance comparisons")
-                print("  • Parameter optimization insights")
-                print("  • Backtesting strategy effectiveness")
-                print("  • Adding new model types (SVR, Gradient Boosting, etc.)")
-                print("  • Scalable architecture benefits")
+                print("The enhanced multi-model analysis is complete. You can ask additional questions about:")
+                print("  • Model performance comparisons and rankings")
+                print("  • Parameter optimization insights across model types")
+                print("  • Backtesting strategy effectiveness analysis")
+                print("  • Adding new model types (SVR, Gradient Boosting, Ridge, Extra Trees)")
+                print("  • Multi-model ensemble analysis and consensus insights")
+                print("  • Risk-return optimization for different trading goals")
+                print("  • Scalable architecture benefits and model comparison efficiency")
+                print("  • Best model selection for specific market conditions")
                 
                 # Get user input for next action
                 try:
@@ -156,7 +167,7 @@ Then transfer_to_human for more questions about the enhanced ML capabilities."""
                 
                 # Check for exit commands
                 if user_input.lower() in ['exit', 'quit', 'bye', '']:
-                    print("\n👋 Thank you for using Genesis Enhanced ML System! Goodbye!")
+                    print("\n👋 Thank you for using Genesis Enhanced Multi-Model ML System! Goodbye!")
                     break
                 
                 # Continue in same session but restart workflow with full context

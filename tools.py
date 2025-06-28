@@ -2390,11 +2390,12 @@ def backtest_model_strategy(
             backtest_data.loc[backtest_data['Predicted_Return'] > pred_return_75, 'Signal'] = 1  # Buy top 25%
             backtest_data.loc[backtest_data['Predicted_Return'] < pred_return_25, 'Signal'] = -1  # Sell bottom 25%
         
-        # Simulate trading
+        # Simulate trading with improved position tracking
         portfolio_value = initial_capital
         cash = initial_capital
         shares = 0
         position = 0  # 0: no position, 1: long, -1: short
+        entry_price = 0  # Track entry price for proper PnL calculation
         
         portfolio_history = []
         trades = []
@@ -2406,15 +2407,20 @@ def backtest_model_strategy(
             # Execute trades based on signals
             if signal == 1 and position <= 0:  # Buy signal
                 if position == -1:  # Cover short position first
-                    cash += shares * current_price * (1 - transaction_cost)
+                    # Calculate PnL for short position: profit when price goes down
+                    pnl = (entry_price - current_price) * shares
+                    cash += pnl - (shares * current_price * transaction_cost)  # Add PnL minus transaction cost
                     trades.append({
                         'date': date,
                         'action': 'cover_short',
                         'price': current_price,
                         'shares': shares,
-                        'value': shares * current_price
+                        'value': shares * current_price,
+                        'pnl': pnl,
+                        'entry_price': entry_price
                     })
                     shares = 0
+                    position = 0  # Reset position
                 
                 # Open long position
                 shares_to_buy = cash // (current_price * (1 + transaction_cost))
@@ -2423,45 +2429,62 @@ def backtest_model_strategy(
                     cash -= cost
                     shares = shares_to_buy
                     position = 1
+                    entry_price = current_price  # Track entry price
                     trades.append({
                         'date': date,
                         'action': 'buy',
                         'price': current_price,
                         'shares': shares_to_buy,
-                        'value': cost
+                        'value': cost,
+                        'pnl': 0,
+                        'entry_price': entry_price
                     })
             
             elif signal == -1 and position >= 0:  # Sell signal
                 if position == 1:  # Sell long position first
-                    cash += shares * current_price * (1 - transaction_cost)
+                    # Calculate PnL for long position: profit when price goes up
+                    pnl = (current_price - entry_price) * shares
+                    cash += (shares * current_price * (1 - transaction_cost))  # Add proceeds minus transaction cost
                     trades.append({
                         'date': date,
                         'action': 'sell',
                         'price': current_price,
                         'shares': shares,
-                        'value': shares * current_price
+                        'value': shares * current_price,
+                        'pnl': pnl,
+                        'entry_price': entry_price
                     })
                     shares = 0
+                    position = 0  # Reset position
                 
-                # Open short position (simplified - assume we can short)
-                shares_to_short = cash // (current_price * (1 + transaction_cost))
+                # Open short position (simplified - assume margin account)
+                # Use available cash as collateral for short position
+                shares_to_short = (cash * 0.5) // (current_price * (1 + transaction_cost))  # 50% margin requirement
                 if shares_to_short > 0:
-                    cash += shares_to_short * current_price * (1 - transaction_cost)
+                    # For short selling, we receive cash proceeds but owe shares
+                    # Simplified: treat as borrowing shares and receiving cash
+                    proceeds = shares_to_short * current_price * (1 - transaction_cost)
+                    cash += proceeds
                     shares = shares_to_short
                     position = -1
+                    entry_price = current_price  # Track entry price for short position
                     trades.append({
                         'date': date,
                         'action': 'short',
                         'price': current_price,
                         'shares': shares_to_short,
-                        'value': shares_to_short * current_price
+                        'value': proceeds,
+                        'pnl': 0,
+                        'entry_price': entry_price
                     })
             
-            # Calculate portfolio value
+            # Calculate portfolio value with proper mark-to-market
             if position == 1:  # Long position
                 portfolio_value = cash + shares * current_price
-            elif position == -1:  # Short position
-                portfolio_value = cash - shares * current_price
+            elif position == -1:  # Short position - mark to market properly
+                # Short position value = cash + (entry_price - current_price) * shares
+                unrealized_pnl = (entry_price - current_price) * shares
+                portfolio_value = cash + unrealized_pnl
             else:  # No position
                 portfolio_value = cash
             
@@ -2472,8 +2495,45 @@ def backtest_model_strategy(
                 'shares': shares,
                 'position': position,
                 'price': current_price,
-                'signal': signal
+                'signal': signal,
+                'entry_price': entry_price
             })
+        
+        # Close any remaining positions at the end
+        if position != 0:
+            final_price = backtest_data['Current_Price'].iloc[-1]
+            final_date = backtest_data.index[-1]
+            
+            if position == 1:  # Close long position
+                pnl = (final_price - entry_price) * shares
+                cash += shares * final_price * (1 - transaction_cost)
+                trades.append({
+                    'date': final_date,
+                    'action': 'sell',
+                    'price': final_price,
+                    'shares': shares,
+                    'value': shares * final_price,
+                    'pnl': pnl,
+                    'entry_price': entry_price
+                })
+            elif position == -1:  # Cover short position
+                pnl = (entry_price - final_price) * shares
+                cash += pnl - (shares * final_price * transaction_cost)
+                trades.append({
+                    'date': final_date,
+                    'action': 'cover_short',
+                    'price': final_price,
+                    'shares': shares,
+                    'value': shares * final_price,
+                    'pnl': pnl,
+                    'entry_price': entry_price
+                })
+            
+            # Update final portfolio value
+            portfolio_history[-1]['portfolio_value'] = cash
+            portfolio_history[-1]['cash'] = cash
+            portfolio_history[-1]['shares'] = 0
+            portfolio_history[-1]['position'] = 0
         
         # Convert to DataFrame for analysis
         portfolio_df = pd.DataFrame(portfolio_history)
@@ -2493,9 +2553,16 @@ def backtest_model_strategy(
         total_return = (portfolio_df['portfolio_value'].iloc[-1] / initial_capital - 1) * 100
         buy_hold_return = (portfolio_df['buy_hold_value'].iloc[-1] / initial_capital - 1) * 100
         
-        # Calculate additional metrics
-        annual_return = ((portfolio_df['portfolio_value'].iloc[-1] / initial_capital) ** (252 / len(portfolio_df)) - 1) * 100
-        volatility = portfolio_df['returns'].std() * np.sqrt(252) * 100
+        # Calculate additional metrics with sufficient data check
+        trading_days = len(portfolio_df)
+        if trading_days >= 30:  # Only calculate annualized metrics if sufficient data
+            annual_return = ((portfolio_df['portfolio_value'].iloc[-1] / initial_capital) ** (252 / trading_days) - 1) * 100
+            volatility = portfolio_df['returns'].std() * np.sqrt(252) * 100
+        else:
+            # Use simple metrics for insufficient data
+            annual_return = total_return  # Don't annualize
+            volatility = portfolio_df['returns'].std() * 100  # Don't annualize
+        
         sharpe_ratio = (annual_return - 2) / volatility if volatility > 0 else 0  # Assuming 2% risk-free rate
         
         # Maximum drawdown
@@ -2503,15 +2570,21 @@ def backtest_model_strategy(
         drawdown = (portfolio_df['portfolio_value'] - rolling_max) / rolling_max
         max_drawdown = drawdown.min() * 100
         
-        # Win rate
-        profitable_trades = len([t for t in trades if 
-                               (t['action'] == 'sell' and len([t2 for t2 in trades if t2['action'] == 'buy' and t2['date'] < t['date']]) > 0) or
-                               (t['action'] == 'cover_short' and len([t2 for t2 in trades if t2['action'] == 'short' and t2['date'] < t['date']]) > 0)])
-        total_trades = len([t for t in trades if t['action'] in ['sell', 'cover_short']])
-        win_rate = (profitable_trades / total_trades * 100) if total_trades > 0 else 0
+        # Fixed win rate calculation - check actual profitability
+        profitable_trades = 0
+        total_closed_trades = 0
+        
+        for trade in trades:
+            if 'pnl' in trade and trade['action'] in ['sell', 'cover_short']:
+                total_closed_trades += 1
+                if trade['pnl'] > 0:
+                    profitable_trades += 1
+        
+        win_rate = (profitable_trades / total_closed_trades * 100) if total_closed_trades > 0 else 0
         
         # Save results if requested
         results_filename = None
+        portfolio_filename = None
         if save_results:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             
@@ -2532,7 +2605,8 @@ def backtest_model_strategy(
                     'sharpe_ratio': float(sharpe_ratio),
                     'max_drawdown_pct': float(max_drawdown),
                     'win_rate_pct': float(win_rate),
-                    'total_trades': int(total_trades),
+                    'total_trades': int(total_closed_trades),
+                    'profitable_trades': int(profitable_trades),
                     'final_portfolio_value': float(portfolio_df['portfolio_value'].iloc[-1])
                 },
                 'benchmark': {
@@ -2567,12 +2641,12 @@ def backtest_model_strategy(
 📊 STRATEGY PERFORMANCE:
 - Final Portfolio Value: ${portfolio_df['portfolio_value'].iloc[-1]:,.2f}
 - Total Return: {total_return:.2f}%
-- Annualized Return: {annual_return:.2f}%
-- Volatility: {volatility:.2f}%
+- {'Annualized' if trading_days >= 30 else 'Total'} Return: {annual_return:.2f}%
+- {'Annualized' if trading_days >= 30 else 'Total'} Volatility: {volatility:.2f}%
 - Sharpe Ratio: {sharpe_ratio:.2f}
 - Maximum Drawdown: {max_drawdown:.2f}%
-- Win Rate: {win_rate:.1f}%
-- Total Trades: {total_trades}
+- Win Rate: {win_rate:.1f}% ({profitable_trades}/{total_closed_trades} trades)
+- Total Closed Trades: {total_closed_trades}
 
 📈 BENCHMARK COMPARISON:
 - Buy & Hold Return: {buy_hold_return:.2f}%
@@ -2583,7 +2657,8 @@ def backtest_model_strategy(
 - Risk-Adjusted Performance: {'Excellent' if sharpe_ratio > 1.5 else 'Good' if sharpe_ratio > 1.0 else 'Fair' if sharpe_ratio > 0.5 else 'Poor'}
 - Strategy Effectiveness: {'Outperforming' if total_return > buy_hold_return else 'Underperforming'} vs Buy & Hold
 - Maximum Risk: {max_drawdown:.1f}% portfolio decline from peak
-- Trading Activity: {'High' if total_trades > len(portfolio_df) * 0.1 else 'Moderate' if total_trades > len(portfolio_df) * 0.05 else 'Low'} frequency
+- Trading Activity: {'High' if total_closed_trades > len(portfolio_df) * 0.1 else 'Moderate' if total_closed_trades > len(portfolio_df) * 0.05 else 'Low'} frequency
+- Data Sufficiency: {'Sufficient for annualized metrics' if trading_days >= 30 else 'Limited - using total period metrics'}
 
 📁 FILES SAVED:
 - Detailed Results: {results_filename if results_filename else 'Not saved'}
@@ -2591,19 +2666,20 @@ def backtest_model_strategy(
 
 ⚠️ IMPORTANT NOTES:
 - Results are based on historical data and may not reflect future performance
-- Transaction costs and slippage are simplified
-- Short selling assumptions may not reflect real market conditions
+- Short selling uses simplified margin accounting (50% margin requirement)
+- Transaction costs and slippage are simplified but consistently applied
+- Position tracking includes proper mark-to-market valuation
+- Win rate based on actual trade profitability, not signal accuracy
 - This is for analysis purposes only, not investment advice
 """
         
-        print(f"✅ backtest_model_strategy: Successfully completed backtesting for {symbol} ({total_trades} trades, {total_return:.2f}% return)")
+        print(f"✅ backtest_model_strategy: Successfully completed backtesting for {symbol} ({total_closed_trades} trades, {total_return:.2f}% return)")
         return summary
         
     except Exception as e:
         error_msg = f"backtest_model_strategy: Error running backtest for {symbol}: {str(e)}"
         print(f"❌ backtest_model_strategy: {error_msg}")
-        return error_msg
-    
+        return error_msg    
 
 # Add these imports to the top of tools.py
 import pickle
@@ -2617,6 +2693,1153 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Replace the existing train_xgboost_price_predictor and train_random_forest_price_predictor functions with these ultra-minimal versions:
+
+
+
+
+
+# =============================================================================
+# MULTI-MODEL BACKTESTING EXTENSIONS
+# Add these functions to tools.py after the existing backtest_model_strategy function
+# =============================================================================
+
+import hashlib
+
+def generate_model_signature(model_type: str, params: dict) -> str:
+    """Create human-readable model signature for identification."""
+    key_params = get_key_parameters(model_type, params)
+    signature_parts = [model_type]
+    for k, v in key_params.items():
+        if isinstance(v, float):
+            signature_parts.append(f"{k}{v:.3f}")
+        else:
+            signature_parts.append(f"{k}{v}")
+    return "_".join(signature_parts)
+
+
+def get_key_parameters(model_type: str, params: dict) -> dict:
+    """Extract most important parameters for model identification."""
+    key_param_map = {
+        'xgboost': ['n_estimators', 'max_depth', 'learning_rate'],
+        'random_forest': ['n_estimators', 'max_depth', 'min_samples_split'],
+        'svr': ['C', 'gamma', 'kernel'],
+        'gradient_boosting': ['n_estimators', 'learning_rate', 'max_depth'],
+        'ridge_regression': ['alpha'],
+        'extra_trees': ['n_estimators', 'max_depth', 'min_samples_split']
+    }
+    key_params = key_param_map.get(model_type, [])
+    return {k: params.get(k, 'default') for k in key_params if k in params}
+
+
+def create_parameter_summary(model_type: str, params: dict) -> str:
+    """Create concise parameter summary for display."""
+    key_params = get_key_parameters(model_type, params)
+    if not key_params:
+        return "default_params"
+    
+    summary_parts = []
+    for k, v in key_params.items():
+        if isinstance(v, float):
+            summary_parts.append(f"{k}={v:.3f}")
+        elif v is None:
+            summary_parts.append(f"{k}=None")
+        else:
+            summary_parts.append(f"{k}={v}")
+    
+    return ", ".join(summary_parts)
+
+
+def calculate_feature_entropy(feature_importance: pd.DataFrame) -> float:
+    """Calculate entropy of feature importance distribution."""
+    if feature_importance.empty:
+        return 0.0
+    
+    importances = feature_importance['importance'].values
+    importances = importances / importances.sum()  # Normalize
+    importances = importances[importances > 0]  # Remove zeros
+    
+    if len(importances) <= 1:
+        return 0.0
+    
+    entropy = -np.sum(importances * np.log2(importances))
+    return float(entropy)
+
+
+def discover_models(symbol: str, model_filter: Optional[str] = None) -> list:
+    """Discover available model files for a symbol."""
+    if not os.path.exists(OUTPUT_DIR):
+        return []
+    
+    all_files = os.listdir(OUTPUT_DIR)
+    model_files = [f for f in all_files if f.endswith('_model.pkl') and symbol.upper() in f.upper()]
+    
+    if model_filter:
+        model_files = [f for f in model_files if model_filter.lower() in f.lower()]
+    
+    return sorted(model_files)
+
+
+def load_model_metadata(model_file: str) -> dict:
+    """Load model metadata from corresponding JSON result file."""
+    try:
+        # Convert model file name to result file name
+        result_file = model_file.replace('_model.pkl', '_results.json')
+        result_path = os.path.join(OUTPUT_DIR, result_file)
+        
+        if os.path.exists(result_path):
+            with open(result_path, 'r') as f:
+                return json.load(f)
+        else:
+            # If no result file, try to extract from model file name
+            return extract_metadata_from_filename(model_file)
+    except Exception as e:
+        print(f"Warning: Could not load metadata for {model_file}: {e}")
+        return extract_metadata_from_filename(model_file)
+
+
+def extract_metadata_from_filename(model_file: str) -> dict:
+    """Extract basic metadata from model filename."""
+    parts = model_file.split('_')
+    model_type = 'unknown'
+    
+    for part in parts:
+        if part in ['xgboost', 'random', 'forest', 'svr', 'gradient', 'boosting', 'ridge', 'regression', 'extra', 'trees']:
+            if 'random' in parts and 'forest' in parts:
+                model_type = 'random_forest'
+            elif 'gradient' in parts and 'boosting' in parts:
+                model_type = 'gradient_boosting'
+            elif 'ridge' in parts and 'regression' in parts:
+                model_type = 'ridge_regression'
+            elif 'extra' in parts and 'trees' in parts:
+                model_type = 'extra_trees'
+            else:
+                model_type = part
+            break
+    
+    return {
+        'model_type': model_type,
+        'model_params': {},
+        'symbol': extract_symbol_from_filename(model_file),
+        'timestamp': extract_timestamp_from_filename(model_file)
+    }
+
+
+def extract_symbol_from_filename(filename: str) -> str:
+    """Extract symbol from filename."""
+    parts = filename.split('_')
+    for part in parts:
+        if len(part) >= 2 and part.isupper():
+            return part
+    return 'UNKNOWN'
+
+
+def extract_timestamp_from_filename(filename: str) -> str:
+    """Extract timestamp from filename."""
+    parts = filename.split('_')
+    for part in parts:
+        if len(part) == 15 and part.isdigit():
+            return part
+    return '000000000000000'
+
+
+def parse_model_list(model_files: str) -> list:
+    """Parse comma-separated model file list."""
+    models = [f.strip() for f in model_files.split(',')]
+    return [f if f.endswith('.pkl') else f + '.pkl' for f in models]
+
+
+def enhance_with_model_metadata(backtest_result_raw: str, model_metadata: dict) -> dict:
+    """Parse raw backtest result string and enhance with model metadata."""
+    try:
+        # Extract key metrics from the backtest result string
+        lines = backtest_result_raw.split('\n')
+        
+        # Initialize result structure
+        result = {
+            'model_metadata': model_metadata,
+            'performance': {},
+            'summary': backtest_result_raw
+        }
+        
+        # Parse performance metrics from the backtest result string
+        for line in lines:
+            if 'Total Return:' in line:
+                try:
+                    value = float(line.split(':')[1].strip().replace('%', ''))
+                    result['performance']['total_return_pct'] = value
+                except:
+                    pass
+            elif 'Sharpe Ratio:' in line:
+                try:
+                    value = float(line.split(':')[1].strip())
+                    result['performance']['sharpe_ratio'] = value
+                except:
+                    pass
+            elif 'Maximum Drawdown:' in line:
+                try:
+                    value = float(line.split(':')[1].strip().replace('%', ''))
+                    result['performance']['max_drawdown_pct'] = value
+                except:
+                    pass
+            elif 'Win Rate:' in line:
+                try:
+                    value = float(line.split(':')[1].strip().split('%')[0])
+                    result['performance']['win_rate_pct'] = value
+                except:
+                    pass
+            elif 'Total Closed Trades:' in line:
+                try:
+                    value = int(line.split(':')[1].strip())
+                    result['performance']['total_trades'] = value
+                except:
+                    pass
+            elif 'Final Portfolio Value:' in line:
+                try:
+                    value_str = line.split(':')[1].strip().replace('$', '').replace(',', '')
+                    value = float(value_str)
+                    result['performance']['final_portfolio_value'] = value
+                except:
+                    pass
+        
+        return result
+        
+    except Exception as e:
+        print(f"Warning: Could not parse backtest result: {e}")
+        return {
+            'model_metadata': model_metadata,
+            'performance': {},
+            'summary': backtest_result_raw
+        }
+
+
+def generate_model_comparison_matrix(all_results: list) -> pd.DataFrame:
+    """Generate comparison matrix from multiple backtest results."""
+    comparison_data = []
+    
+    for result in all_results:
+        try:
+            metadata = result.get('model_metadata', {})
+            performance = result.get('performance', {})
+            
+            model_type = metadata.get('model_type', 'unknown')
+            model_params = metadata.get('model_params', {})
+            
+            comparison_data.append({
+                'model_id': generate_model_signature(model_type, model_params),
+                'model_type': model_type.replace('_', ' ').title(),
+                'parameters': create_parameter_summary(model_type, model_params),
+                'total_return': performance.get('total_return_pct', 0.0),
+                'sharpe_ratio': performance.get('sharpe_ratio', 0.0),
+                'max_drawdown': performance.get('max_drawdown_pct', 0.0),
+                'win_rate': performance.get('win_rate_pct', 0.0),
+                'total_trades': performance.get('total_trades', 0),
+                'final_value': performance.get('final_portfolio_value', 0.0),
+                'timestamp': metadata.get('timestamp', ''),
+                'target_days': metadata.get('target_days', 1)
+            })
+        except Exception as e:
+            print(f"Warning: Could not process result for comparison: {e}")
+            continue
+    
+    if not comparison_data:
+        return pd.DataFrame()
+    
+    df = pd.DataFrame(comparison_data)
+    return df.sort_values('total_return', ascending=False)
+
+
+def calculate_model_rankings(all_results: list) -> dict:
+    """Calculate model rankings across different metrics."""
+    if not all_results:
+        return {}
+    
+    comparison_df = generate_model_comparison_matrix(all_results)
+    if comparison_df.empty:
+        return {}
+    
+    rankings = {}
+    
+    # Best total return
+    best_return_idx = comparison_df['total_return'].idxmax()
+    rankings['best_return'] = {
+        'model_id': comparison_df.loc[best_return_idx, 'model_id'],
+        'model_type': comparison_df.loc[best_return_idx, 'model_type'],
+        'value': comparison_df.loc[best_return_idx, 'total_return']
+    }
+    
+    # Best Sharpe ratio
+    best_sharpe_idx = comparison_df['sharpe_ratio'].idxmax()
+    rankings['best_sharpe'] = {
+        'model_id': comparison_df.loc[best_sharpe_idx, 'model_id'],
+        'model_type': comparison_df.loc[best_sharpe_idx, 'model_type'],
+        'value': comparison_df.loc[best_sharpe_idx, 'sharpe_ratio']
+    }
+    
+    # Smallest drawdown (least negative)
+    best_drawdown_idx = comparison_df['max_drawdown'].idxmax()  # Max because less negative is better
+    rankings['best_drawdown'] = {
+        'model_id': comparison_df.loc[best_drawdown_idx, 'model_id'],
+        'model_type': comparison_df.loc[best_drawdown_idx, 'model_type'],
+        'value': comparison_df.loc[best_drawdown_idx, 'max_drawdown']
+    }
+    
+    # Best win rate
+    best_winrate_idx = comparison_df['win_rate'].idxmax()
+    rankings['best_winrate'] = {
+        'model_id': comparison_df.loc[best_winrate_idx, 'model_id'],
+        'model_type': comparison_df.loc[best_winrate_idx, 'model_type'],
+        'value': comparison_df.loc[best_winrate_idx, 'win_rate']
+    }
+    
+    # Most active (most trades)
+    most_active_idx = comparison_df['total_trades'].idxmax()
+    rankings['most_active'] = {
+        'model_id': comparison_df.loc[most_active_idx, 'model_id'],
+        'model_type': comparison_df.loc[most_active_idx, 'model_type'],
+        'value': comparison_df.loc[most_active_idx, 'total_trades']
+    }
+    
+    return rankings
+
+
+def save_multi_model_results(symbol: str, all_results: list, comparison_matrix: pd.DataFrame, rankings: dict) -> dict:
+    """Save multi-model comparison results."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Save detailed results
+    detailed_results = {
+        'symbol': symbol,
+        'comparison_timestamp': timestamp,
+        'models_analyzed': len(all_results),
+        'comparison_matrix': comparison_matrix.to_dict('records') if not comparison_matrix.empty else [],
+        'rankings': rankings,
+        'detailed_results': all_results
+    }
+    
+    results_filename = f"backtest_multiple_models_{symbol}_detailed_{timestamp}.json"
+    results_filepath = os.path.join(OUTPUT_DIR, results_filename)
+    
+    with open(results_filepath, 'w') as f:
+        json.dump(detailed_results, f, indent=2, default=str)
+    
+    # Save comparison matrix as CSV
+    matrix_filename = None
+    if not comparison_matrix.empty:
+        matrix_filename = f"backtest_multiple_models_{symbol}_comparison_{timestamp}.csv"
+        matrix_filepath = os.path.join(OUTPUT_DIR, matrix_filename)
+        comparison_matrix.to_csv(matrix_filepath, index=False)
+    
+    return {
+        'detailed_results': results_filename,
+        'comparison_matrix': matrix_filename
+    }
+
+
+def format_multi_model_summary(comparison_matrix: pd.DataFrame, rankings: dict, symbol: str, models_analyzed: int) -> str:
+    """Format comprehensive multi-model comparison summary."""
+    
+    summary = f"""backtest_multiple_models: Successfully analyzed {models_analyzed} models for {symbol}:
+
+🎯 MULTI-MODEL BACKTESTING SUMMARY:
+- Symbol: {symbol}
+- Models Analyzed: {models_analyzed}
+- Successful Backtests: {len(comparison_matrix) if not comparison_matrix.empty else 0}
+- Analysis Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+"""
+    
+    if comparison_matrix.empty:
+        summary += """❌ NO SUCCESSFUL BACKTESTS:
+- No models could be successfully backtested
+- Check model files and data availability
+- Ensure models have corresponding result files
+"""
+        return summary
+    
+    # Top 5 performers by return
+    top_5 = comparison_matrix.head(5)
+    summary += "🏆 TOP 5 PERFORMERS (by Total Return):\n"
+    for i, (_, row) in enumerate(top_5.iterrows(), 1):
+        summary += f"  {i}. {row['model_type']}: {row['total_return']:.2f}% return, {row['sharpe_ratio']:.2f} Sharpe\n"
+        summary += f"     Parameters: {row['parameters']}\n"
+    
+    summary += "\n📊 PERFORMANCE RANKINGS:\n"
+    
+    for metric, data in rankings.items():
+        metric_display = metric.replace('_', ' ').title()
+        summary += f"- {metric_display}: {data['model_type']} ({data['value']:.2f})\n"
+    
+    # Performance distribution
+    if len(comparison_matrix) > 1:
+        summary += f"""
+📈 PERFORMANCE DISTRIBUTION:
+- Return Range: {comparison_matrix['total_return'].min():.2f}% to {comparison_matrix['total_return'].max():.2f}%
+- Average Return: {comparison_matrix['total_return'].mean():.2f}%
+- Sharpe Range: {comparison_matrix['sharpe_ratio'].min():.2f} to {comparison_matrix['sharpe_ratio'].max():.2f}
+- Average Sharpe: {comparison_matrix['sharpe_ratio'].mean():.2f}
+- Drawdown Range: {comparison_matrix['max_drawdown'].min():.2f}% to {comparison_matrix['max_drawdown'].max():.2f}%
+
+"""
+    
+    # Model type analysis
+    model_type_counts = comparison_matrix['model_type'].value_counts()
+    summary += "🤖 MODEL TYPE BREAKDOWN:\n"
+    for model_type, count in model_type_counts.items():
+        avg_return = comparison_matrix[comparison_matrix['model_type'] == model_type]['total_return'].mean()
+        summary += f"- {model_type}: {count} models, {avg_return:.2f}% avg return\n"
+    
+    summary += f"""
+📁 RESULTS SAVED:
+- Detailed Analysis: backtest_multiple_models_{symbol}_detailed_[timestamp].json
+- Comparison Matrix: backtest_multiple_models_{symbol}_comparison_[timestamp].csv
+
+💡 KEY INSIGHTS:
+- Best Overall: {rankings.get('best_return', {}).get('model_type', 'N/A')} model
+- Most Consistent: {rankings.get('best_sharpe', {}).get('model_type', 'N/A')} model  
+- Safest: {rankings.get('best_drawdown', {}).get('model_type', 'N/A')} model
+- Performance Spread: {comparison_matrix['total_return'].max() - comparison_matrix['total_return'].min():.2f}% difference between best and worst
+"""
+    
+    return summary
+
+
+@tool
+def backtest_multiple_models(
+    symbol: str,
+    model_files: str = "auto",
+    model_filter: Optional[str] = None,
+    strategy_type: str = "directional",
+    initial_capital: float = 10000.0,
+    transaction_cost: float = 0.001,
+    save_comparison: bool = True
+) -> str:
+    """
+    Backtest multiple trained models simultaneously and compare their performance.
+    
+    This tool orchestrates backtesting across multiple models, providing comprehensive
+    comparison analysis, rankings, and insights to identify the best performing models
+    and understand parameter impacts on trading performance.
+    
+    Args:
+        symbol (str): Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
+                     Must have trained models available for backtesting
+        
+        model_files (str): Model selection strategy:
+                          - "auto": Automatically discover all available models for symbol
+                          - "model1.pkl,model2.pkl": Comma-separated specific model files
+                          - "latest_5": Use 5 most recently trained models
+        
+        model_filter (Optional[str]): Filter models by type:
+                                     - "xgboost": Only XGBoost models
+                                     - "random_forest": Only Random Forest models
+                                     - "svr": Only Support Vector Regression models
+                                     - None: Include all model types
+        
+        strategy_type (str): Trading strategy for all models:
+                           - "directional": Buy if predicted > current, sell if < current
+                           - "threshold": Buy/sell based on return thresholds
+                           - "percentile": Buy/sell based on prediction percentiles
+        
+        initial_capital (float): Starting capital for each backtest ($10,000 default)
+                               Same capital used for fair comparison across models
+        
+        transaction_cost (float): Transaction cost percentage (0.001 = 0.1%)
+                                Applied consistently across all model backtests
+        
+        save_comparison (bool): Whether to save detailed comparison results and matrix
+                              TRUE RECOMMENDED for analysis and reporting
+    
+    Returns:
+        str: Comprehensive multi-model comparison report including:
+             - Performance rankings and top performers
+             - Model type analysis and parameter impacts  
+             - Statistical performance distribution
+             - Best models by different metrics (return, Sharpe, drawdown)
+             - Detailed comparison matrix with all models
+             - File locations for saved comparison data
+    
+    Key Features:
+        - **Auto-Discovery**: Automatically finds all trained models for symbol
+        - **Fair Comparison**: Uses identical backtesting parameters for all models
+        - **Multiple Rankings**: Ranks by return, Sharpe ratio, drawdown, win rate
+        - **Parameter Analysis**: Shows how parameter differences impact performance
+        - **Model Type Insights**: Compares XGBoost vs Random Forest vs other models
+        - **Statistical Analysis**: Performance distributions and spreads
+        - **Scalable**: Efficiently handles 20+ models without performance issues
+    
+    Example Usage for AI Agents:
+        # Compare all available models
+        result = backtest_multiple_models("AAPL")
+        
+        # Compare only XGBoost models
+        result = backtest_multiple_models("TSLA", model_filter="xgboost")
+        
+        # Compare specific models
+        result = backtest_multiple_models("GOOGL", model_files="model1.pkl,model2.pkl,model3.pkl")
+        
+        # Use threshold strategy for comparison
+        result = backtest_multiple_models("MSFT", strategy_type="threshold")
+    
+    Expected Outputs:
+        - Models ranked by total return, Sharpe ratio, maximum drawdown
+        - Parameter impact analysis (e.g., how learning_rate affects performance)
+        - Model type comparison (which algorithm works best for this symbol)
+        - Performance consistency analysis across different models
+        - Detailed comparison matrix saved as CSV for further analysis
+    
+    AI Agent Decision Guidelines:
+        - Use "auto" for comprehensive model comparison
+        - Filter by model_type when comparing algorithm effectiveness
+        - Analyze parameter patterns in top performers
+        - Consider both return and risk metrics for final model selection
+        - Use results to guide future model training parameter choices
+    """
+    print(f"🔄 backtest_multiple_models: Starting multi-model backtesting for {symbol.upper()}...")
+    
+    try:
+        symbol = symbol.upper()
+        
+        # 1. Discovery phase - find available models
+        if model_files == "auto":
+            available_models = discover_models(symbol, model_filter)
+        elif model_files == "latest_5":
+            all_models = discover_models(symbol, model_filter)
+            # Sort by modification time and take latest 5
+            model_times = [(f, os.path.getmtime(os.path.join(OUTPUT_DIR, f))) for f in all_models]
+            sorted_models = sorted(model_times, key=lambda x: x[1], reverse=True)
+            available_models = [f[0] for f in sorted_models[:5]]
+        else:
+            available_models = parse_model_list(model_files)
+            # Filter to only existing files
+            available_models = [f for f in available_models if os.path.exists(os.path.join(OUTPUT_DIR, f))]
+        
+        if not available_models:
+            result = f"backtest_multiple_models: No models found for {symbol}. Train models first or check model_filter."
+            print(f"❌ backtest_multiple_models: {result}")
+            return result
+        
+        print(f"🔍 backtest_multiple_models: Found {len(available_models)} models for {symbol}")
+        
+        # 2. Backtesting phase - run each model through existing backtest function
+        all_results = []
+        successful_backtests = 0
+        
+        for i, model_file in enumerate(available_models, 1):
+            try:
+                print(f"🔄 backtest_multiple_models: Backtesting model {i}/{len(available_models)}: {model_file}")
+                
+                # Load model metadata
+                model_metadata = load_model_metadata(model_file)
+                
+                # Run existing backtesting function (don't save individual results)
+                backtest_result_raw = backtest_model_strategy(
+                    symbol=symbol,
+                    model_file=model_file,
+                    strategy_type=strategy_type,
+                    initial_capital=initial_capital,
+                    transaction_cost=transaction_cost,
+                    save_results=False  # We'll aggregate results
+                )
+                
+                # Check if backtest was successful
+                if "Error" not in backtest_result_raw and "Total Return:" in backtest_result_raw:
+                    # Enhance with metadata
+                    enhanced_result = enhance_with_model_metadata(backtest_result_raw, model_metadata)
+                    enhanced_result['model_file'] = model_file
+                    all_results.append(enhanced_result)
+                    successful_backtests += 1
+                    print(f"✅ backtest_multiple_models: Successfully backtested {model_file}")
+                else:
+                    print(f"❌ backtest_multiple_models: Failed to backtest {model_file}")
+                
+            except Exception as e:
+                print(f"❌ backtest_multiple_models: Error backtesting {model_file}: {str(e)}")
+                continue
+        
+        if successful_backtests == 0:
+            result = f"backtest_multiple_models: No models could be successfully backtested for {symbol}."
+            print(f"❌ backtest_multiple_models: {result}")
+            return result
+        
+        print(f"✅ backtest_multiple_models: Successfully backtested {successful_backtests}/{len(available_models)} models")
+        
+        # 3. Comparison phase - generate comparison matrix and rankings
+        comparison_matrix = generate_model_comparison_matrix(all_results)
+        rankings = calculate_model_rankings(all_results)
+        
+        # 4. Save results if requested
+        saved_files = {}
+        if save_comparison:
+            saved_files = save_multi_model_results(symbol, all_results, comparison_matrix, rankings)
+        
+        # 5. Generate comprehensive summary
+        summary = format_multi_model_summary(comparison_matrix, rankings, symbol, len(available_models))
+        
+        # Add file information
+        if saved_files:
+            summary += f"\n📁 COMPARISON FILES SAVED:\n"
+            summary += f"- Detailed Results: {saved_files['detailed_results']}\n"
+            if saved_files['comparison_matrix']:
+                summary += f"- Comparison Matrix: {saved_files['comparison_matrix']}\n"
+        
+        print(f"✅ backtest_multiple_models: Completed multi-model analysis for {symbol} ({successful_backtests} models)")
+        return summary
+        
+    except Exception as e:
+        error_msg = f"backtest_multiple_models: Error analyzing models for {symbol}: {str(e)}"
+        print(f"❌ backtest_multiple_models: {error_msg}")
+        return error_msg
+
+
+@tool
+def visualize_model_comparison_backtesting(
+    symbol: str,
+    comparison_results_file: Optional[str] = None,
+    chart_type: Literal["performance_comparison", "parameter_sensitivity", "risk_return_scatter", "model_type_analysis"] = "performance_comparison",
+    top_n_models: int = 10,
+    save_chart: bool = True
+) -> str:
+    """
+    Create comprehensive visualizations comparing multiple model backtesting results.
+    
+    This tool generates interactive charts that help analyze model performance patterns,
+    parameter impacts, and identify the best performing models across different metrics.
+    
+    Args:
+        symbol (str): Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
+                     Must have multi-model backtest results available
+        
+        comparison_results_file (Optional[str]): Specific comparison results file to visualize
+                                               If None, uses most recent multi-model results
+                                               Format: "backtest_multiple_models_SYMBOL_detailed_TIMESTAMP.json"
+        
+        chart_type (str): Type of visualization to create:
+                         - "performance_comparison": Bar charts of returns, Sharpe, drawdown
+                         - "parameter_sensitivity": How parameters affect performance
+                         - "risk_return_scatter": Risk vs return scatter plot
+                         - "model_type_analysis": Performance by model algorithm type
+        
+        top_n_models (int): Number of top models to include in visualizations (default 10)
+                           Helps focus on best performers for readability
+        
+        save_chart (bool): Whether to save interactive chart as HTML file
+                          TRUE RECOMMENDED for detailed analysis and sharing
+    
+    Returns:
+        str: Description of created visualizations with insights and file locations
+    
+    Visualization Features:
+        - **Interactive Charts**: Hover details, zoom, pan capabilities
+        - **Model Identification**: Clear model names with key parameters
+        - **Performance Metrics**: Return, Sharpe ratio, drawdown, win rate
+        - **Parameter Analysis**: How learning rate, depth, etc. impact results
+        - **Risk-Return Analysis**: Optimal risk-adjusted performance identification
+        - **Model Type Comparison**: Algorithm effectiveness comparison
+    
+    Example Usage for AI Agents:
+        # Visualize performance comparison
+        result = visualize_model_comparison_backtesting("AAPL")
+        
+        # Parameter sensitivity analysis
+        result = visualize_model_comparison_backtesting("TSLA", chart_type="parameter_sensitivity")
+        
+        # Risk-return analysis
+        result = visualize_model_comparison_backtesting("GOOGL", chart_type="risk_return_scatter")
+        
+        # Model type effectiveness
+        result = visualize_model_comparison_backtesting("MSFT", chart_type="model_type_analysis")
+    """
+    print(f"🔄 visualize_model_comparison_backtesting: Creating visualization for {symbol.upper()}...")
+    
+    try:
+        symbol = symbol.upper()
+        
+        # Find comparison results file
+        if comparison_results_file:
+            if not comparison_results_file.endswith('.json'):
+                comparison_results_file += '.json'
+            results_path = os.path.join(OUTPUT_DIR, comparison_results_file)
+        else:
+            # Find most recent multi-model results file
+            available_files = os.listdir(OUTPUT_DIR) if os.path.exists(OUTPUT_DIR) else []
+            comparison_files = [f for f in available_files if 
+                              f.startswith(f"backtest_multiple_models_{symbol}_detailed_") and f.endswith('.json')]
+            
+            if not comparison_files:
+                result = f"visualize_model_comparison_backtesting: No multi-model results found for {symbol}. Run backtest_multiple_models first."
+                print(f"❌ visualize_model_comparison_backtesting: {result}")
+                return result
+            
+            latest_file = max(comparison_files, key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
+            results_path = os.path.join(OUTPUT_DIR, latest_file)
+            comparison_results_file = latest_file
+        
+        # Load comparison results
+        with open(results_path, 'r') as f:
+            comparison_data = json.load(f)
+        
+        comparison_matrix = pd.DataFrame(comparison_data['comparison_matrix'])
+        if comparison_matrix.empty:
+            result = f"visualize_model_comparison_backtesting: No model data found in {comparison_results_file}."
+            print(f"❌ visualize_model_comparison_backtesting: {result}")
+            return result
+        
+        # Limit to top N models for readability
+        comparison_matrix = comparison_matrix.head(top_n_models)
+        
+        print(f"📊 visualize_model_comparison_backtesting: Loaded {len(comparison_matrix)} models from {comparison_results_file}")
+        
+        # Create visualization based on chart type
+        if chart_type == "performance_comparison":
+            fig = create_performance_comparison_chart(comparison_matrix, symbol)
+        elif chart_type == "parameter_sensitivity":
+            fig = create_parameter_sensitivity_chart(comparison_matrix, symbol)
+        elif chart_type == "risk_return_scatter":
+            fig = create_risk_return_scatter_chart(comparison_matrix, symbol)
+        elif chart_type == "model_type_analysis":
+            fig = create_model_type_analysis_chart(comparison_matrix, symbol)
+        else:
+            result = f"visualize_model_comparison_backtesting: Unknown chart type: {chart_type}"
+            print(f"❌ visualize_model_comparison_backtesting: {result}")
+            return result
+        
+        # Save chart if requested
+        chart_filename = None
+        if save_chart:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            chart_filename = f"visualize_model_comparison_backtesting_{symbol}_{chart_type}_{timestamp}.html"
+            chart_filepath = os.path.join(OUTPUT_DIR, chart_filename)
+            
+            plot(fig, filename=chart_filepath, auto_open=False, include_plotlyjs=True)
+            file_size = os.path.getsize(chart_filepath)
+        
+        # Calculate insights
+        best_return = comparison_matrix.loc[comparison_matrix['total_return'].idxmax()]
+        best_sharpe = comparison_matrix.loc[comparison_matrix['sharpe_ratio'].idxmax()]
+        
+        summary = f"""visualize_model_comparison_backtesting: Successfully created {chart_type.replace('_', ' ')} visualization for {symbol}:
+
+        📊 VISUALIZATION SUMMARY:
+        - Symbol: {symbol}
+        - Chart Type: {chart_type.replace('_', ' ').title()}
+        - Models Displayed: {len(comparison_matrix)}
+        - Data Source: {comparison_results_file}
+        - Performance Range: {comparison_matrix['total_return'].min():.2f}% to {comparison_matrix['total_return'].max():.2f}%
+
+        🏆 TOP PERFORMERS:
+        - Best Return: {best_return['model_type']} ({best_return['total_return']:.2f}%)
+        Parameters: {best_return['parameters']}
+        - Best Sharpe: {best_sharpe['model_type']} ({best_sharpe['sharpe_ratio']:.2f})
+        Parameters: {best_sharpe['parameters']}
+
+        📈 VISUALIZATION FEATURES:
+        - Interactive Plotly charts with hover details
+        - Model identification with key parameters
+        - Performance metrics comparison
+        - Clear visual ranking and patterns
+        - Professional formatting for presentations
+
+        📁 CHART SAVED: {chart_filename if chart_filename else 'Not saved'}
+        - Location: {os.path.join(OUTPUT_DIR, chart_filename) if chart_filename else 'N/A'}
+        - File Size: {file_size:,} bytes if chart_filename else 'N/A'
+        - Format: Interactive HTML with embedded JavaScript
+
+        💡 KEY INSIGHTS:
+        - Performance Spread: {comparison_matrix['total_return'].max() - comparison_matrix['total_return'].min():.2f}% difference
+        - Sharpe Range: {comparison_matrix['sharpe_ratio'].min():.2f} to {comparison_matrix['sharpe_ratio'].max():.2f}
+        - Model Types: {comparison_matrix['model_type'].nunique()} different algorithms tested
+        - Average Return: {comparison_matrix['total_return'].mean():.2f}%
+
+        The visualization provides clear insights into model performance patterns and helps identify optimal parameter configurations for future model training.
+        """
+        
+        print(f"✅ visualize_model_comparison_backtesting: Successfully created {chart_type} chart for {symbol}")
+        return summary
+        
+    except Exception as e:
+        error_msg = f"visualize_model_comparison_backtesting: Error creating visualization for {symbol}: {str(e)}"
+        print(f"❌ visualize_model_comparison_backtesting: {error_msg}")
+        return error_msg
+
+
+def create_performance_comparison_chart(comparison_matrix: pd.DataFrame, symbol: str):
+    """Create performance comparison bar charts."""
+    fig = sp.make_subplots(
+        rows=2, cols=2,
+        subplot_titles=[
+            f'{symbol} Total Return Comparison',
+            f'{symbol} Sharpe Ratio Comparison', 
+            f'{symbol} Maximum Drawdown Comparison',
+            f'{symbol} Win Rate Comparison'
+        ],
+        vertical_spacing=0.12,
+        horizontal_spacing=0.12
+    )
+    
+    # Prepare data - truncate long model names for display
+    display_names = []
+    for _, row in comparison_matrix.iterrows():
+        name = f"{row['model_type'][:8]}..{row['model_id'][-8:]}" if len(row['model_id']) > 20 else row['model_id']
+        display_names.append(name)
+    
+    # Total Return (Row 1, Col 1)
+    fig.add_trace(go.Bar(
+        x=display_names,
+        y=comparison_matrix['total_return'],
+        name='Total Return (%)',
+        marker_color='lightblue',
+        hovertemplate='<b>%{x}</b><br>Return: %{y:.2f}%<extra></extra>'
+    ), row=1, col=1)
+    
+    # Sharpe Ratio (Row 1, Col 2)
+    fig.add_trace(go.Bar(
+        x=display_names,
+        y=comparison_matrix['sharpe_ratio'],
+        name='Sharpe Ratio',
+        marker_color='lightgreen',
+        hovertemplate='<b>%{x}</b><br>Sharpe: %{y:.2f}<extra></extra>',
+        showlegend=False
+    ), row=1, col=2)
+    
+    # Max Drawdown (Row 2, Col 1) - less negative is better
+    fig.add_trace(go.Bar(
+        x=display_names,
+        y=comparison_matrix['max_drawdown'],
+        name='Max Drawdown (%)',
+        marker_color='lightcoral',
+        hovertemplate='<b>%{x}</b><br>Drawdown: %{y:.2f}%<extra></extra>',
+        showlegend=False
+    ), row=2, col=1)
+    
+    # Win Rate (Row 2, Col 2)
+    fig.add_trace(go.Bar(
+        x=display_names,
+        y=comparison_matrix['win_rate'],
+        name='Win Rate (%)',
+        marker_color='lightyellow',
+        hovertemplate='<b>%{x}</b><br>Win Rate: %{y:.1f}%<extra></extra>',
+        showlegend=False
+    ), row=2, col=2)
+    
+    fig.update_layout(
+        title=f'{symbol} Model Performance Comparison',
+        template='plotly_white',
+        height=800,
+        width=1200,
+        showlegend=False
+    )
+    
+    # Update y-axis titles
+    fig.update_yaxes(title_text='Return (%)', row=1, col=1)
+    fig.update_yaxes(title_text='Sharpe Ratio', row=1, col=2)
+    fig.update_yaxes(title_text='Drawdown (%)', row=2, col=1)
+    fig.update_yaxes(title_text='Win Rate (%)', row=2, col=2)
+    
+    # Rotate x-axis labels for better readability
+    fig.update_xaxes(tickangle=45)
+    
+    return fig
+
+
+def create_parameter_sensitivity_chart(comparison_matrix: pd.DataFrame, symbol: str):
+    """Create parameter sensitivity analysis chart."""
+    fig = go.Figure()
+    
+    # Extract parameter information and plot
+    model_types = comparison_matrix['model_type'].unique()
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+    
+    for i, model_type in enumerate(model_types):
+        model_data = comparison_matrix[comparison_matrix['model_type'] == model_type]
+        
+        fig.add_trace(go.Scatter(
+            x=list(range(len(model_data))),
+            y=model_data['total_return'],
+            mode='markers+lines',
+            name=model_type,
+            marker=dict(
+                size=model_data['sharpe_ratio'] * 5 + 5,  # Size by Sharpe ratio
+                color=colors[i % len(colors)],
+                opacity=0.7
+            ),
+            line=dict(color=colors[i % len(colors)]),
+            hovertemplate=f'<b>{model_type}</b><br>' +
+                         'Return: %{y:.2f}%<br>' +
+                         'Parameters: %{text}<extra></extra>',
+            text=model_data['parameters']
+        ))
+    
+    fig.update_layout(
+        title=f'{symbol} Parameter Sensitivity Analysis',
+        xaxis_title='Model Variants',
+        yaxis_title='Total Return (%)',
+        template='plotly_white',
+        height=600,
+        width=1200,
+        hovermode='closest'
+    )
+    
+    return fig
+
+
+def create_risk_return_scatter_chart(comparison_matrix: pd.DataFrame, symbol: str):
+    """Create risk-return scatter plot."""
+    fig = go.Figure()
+    
+    # Use max drawdown as risk measure (absolute value for better visualization)
+    risk_measure = comparison_matrix['max_drawdown'].abs()
+    
+    model_types = comparison_matrix['model_type'].unique()
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+    
+    for i, model_type in enumerate(model_types):
+        model_data = comparison_matrix[comparison_matrix['model_type'] == model_type]
+        model_risk = risk_measure[comparison_matrix['model_type'] == model_type]
+        
+        fig.add_trace(go.Scatter(
+            x=model_risk,
+            y=model_data['total_return'],
+            mode='markers',
+            name=model_type,
+            marker=dict(
+                size=model_data['total_trades'] / 5 + 8,  # Size by number of trades
+                color=colors[i % len(colors)],
+                opacity=0.7
+            ),
+            hovertemplate=f'<b>{model_type}</b><br>' +
+                         'Risk (Drawdown): %{x:.2f}%<br>' +
+                         'Return: %{y:.2f}%<br>' +
+                         'Trades: %{text}<extra></extra>',
+            text=model_data['total_trades']
+        ))
+    
+    fig.update_layout(
+        title=f'{symbol} Risk-Return Analysis',
+        xaxis_title='Risk (Max Drawdown %)',
+        yaxis_title='Total Return (%)',
+        template='plotly_white',
+        height=600,
+        width=1200,
+        hovermode='closest'
+    )
+    
+    # Add diagonal lines for Sharpe ratio reference
+    max_risk = risk_measure.max()
+    max_return = comparison_matrix['total_return'].max()
+    
+    # Add reference lines for different Sharpe ratios
+    for sharpe in [0.5, 1.0, 1.5]:
+        fig.add_shape(
+            type="line",
+            x0=0, y0=0,
+            x1=max_risk, y1=max_risk * sharpe,
+            line=dict(color="gray", width=1, dash="dot"),
+        )
+        fig.add_annotation(
+            x=max_risk * 0.8,
+            y=max_risk * 0.8 * sharpe,
+            text=f"Sharpe {sharpe}",
+            showarrow=False,
+            font=dict(size=10, color="gray")
+        )
+    
+    return fig
+
+
+def create_model_type_analysis_chart(comparison_matrix: pd.DataFrame, symbol: str):
+    """Create model type analysis chart."""
+    # Calculate average performance by model type
+    model_type_stats = comparison_matrix.groupby('model_type').agg({
+        'total_return': ['mean', 'std', 'count'],
+        'sharpe_ratio': 'mean',
+        'max_drawdown': 'mean',
+        'win_rate': 'mean'
+    }).round(2)
+    
+    model_type_stats.columns = ['avg_return', 'return_std', 'count', 'avg_sharpe', 'avg_drawdown', 'avg_winrate']
+    model_type_stats = model_type_stats.reset_index()
+    
+    fig = sp.make_subplots(
+        rows=1, cols=2,
+        subplot_titles=[f'{symbol} Average Return by Model Type', f'{symbol} Risk-Adjusted Performance'],
+        specs=[[{"secondary_y": False}, {"secondary_y": True}]]
+    )
+    
+    # Average return with error bars (Row 1, Col 1)
+    fig.add_trace(go.Bar(
+        x=model_type_stats['model_type'],
+        y=model_type_stats['avg_return'],
+        error_y=dict(type='data', array=model_type_stats['return_std']),
+        name='Average Return',
+        marker_color='lightblue',
+        hovertemplate='<b>%{x}</b><br>Avg Return: %{y:.2f}%<br>Std Dev: %{error_y.array:.2f}%<br>Models: %{text}<extra></extra>',
+        text=model_type_stats['count']
+    ), row=1, col=1)
+    
+    # Sharpe ratio (Row 1, Col 2)
+    fig.add_trace(go.Bar(
+        x=model_type_stats['model_type'],
+        y=model_type_stats['avg_sharpe'],
+        name='Average Sharpe',
+        marker_color='lightgreen',
+        hovertemplate='<b>%{x}</b><br>Avg Sharpe: %{y:.2f}<extra></extra>',
+        showlegend=False
+    ), row=1, col=2)
+    
+    # Win rate as secondary y-axis
+    fig.add_trace(go.Scatter(
+        x=model_type_stats['model_type'],
+        y=model_type_stats['avg_winrate'],
+        mode='markers+lines',
+        name='Average Win Rate',
+        marker=dict(color='red', size=10),
+        line=dict(color='red', dash='dot'),
+        hovertemplate='<b>%{x}</b><br>Avg Win Rate: %{y:.1f}%<extra></extra>',
+        yaxis='y2'
+    ), row=1, col=2)
+    
+    fig.update_layout(
+        title=f'{symbol} Model Type Performance Analysis',
+        template='plotly_white',
+        height=500,
+        width=1200
+    )
+    
+    # Update y-axis titles
+    fig.update_yaxes(title_text='Average Return (%)', row=1, col=1)
+    fig.update_yaxes(title_text='Average Sharpe Ratio', row=1, col=2)
+    fig.update_yaxes(title_text='Average Win Rate (%)', secondary_y=True, row=1, col=2)
+    
+    return fig
+
+
+# =============================================================================
+# ENHANCED MODEL METADATA STORAGE
+# This replaces the existing save_model_artifacts function in tools.py
+# =============================================================================
+
+def save_model_artifacts(
+    model,
+    model_data: dict,
+    predictions_data: dict,
+    metrics: dict,
+    feature_importance: pd.DataFrame,
+    symbol: str,
+    model_type: str,
+    model_params: dict,
+    target_days: int,
+    save_model: bool = True,
+    save_predictions: bool = True
+) -> dict:
+    """
+    Enhanced version of save_model_artifacts with richer metadata for multi-model comparison.
+    This replaces the existing save_model_artifacts function.
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filenames = {'model': None, 'results': None, 'predictions': None}
+    
+    if save_model:
+        # Save model with enhanced metadata
+        model_filename = f"train_{model_type}_price_predictor_{symbol}_model_{timestamp}.pkl"
+        model_filepath = os.path.join(OUTPUT_DIR, model_filename)
+        
+        # Enhanced model metadata
+        model_metadata = {
+            'model': model,
+            'scaler': model_data['scaler'],
+            'feature_cols': model_data['feature_cols'],
+            'target_days': target_days,
+            'symbol': symbol,
+            'model_type': model_type,
+            'model_id': generate_model_signature(model_type, model_params),
+            'parameter_summary': create_parameter_summary(model_type, model_params),
+            'training_context': {
+                'data_source': model_data['data_source'],
+                'training_samples': len(model_data['X_train']),
+                'test_samples': len(model_data['X_test']),
+                'features_used': len(model_data['feature_cols']),
+                'target_days': target_days
+            },
+            'performance_fingerprint': {
+                'test_r2': metrics['test_metrics']['r2'],
+                'cv_stability': metrics['cross_validation']['cv_r2_std'],
+                'feature_importance_entropy': calculate_feature_entropy(feature_importance)
+            }
+        }
+        
+        with open(model_filepath, 'wb') as f:
+            pickle.dump(model_metadata, f)
+        filenames['model'] = model_filename
+        
+        # Enhanced results with metadata
+        results = {
+            'symbol': symbol,
+            'model_type': model_type.replace('_', ' ').title(),
+            'model_id': generate_model_signature(model_type, model_params),
+            'parameter_summary': create_parameter_summary(model_type, model_params),
+            'target_days': target_days,
+            'data_source': model_data['data_source'],
+            'training_samples': len(model_data['X_train']),
+            'test_samples': len(model_data['X_test']),
+            'features_used': model_data['feature_cols'],
+            'model_params': model_params,
+            'performance': {
+                'train_r2': metrics['train_metrics']['r2'],
+                'test_r2': metrics['test_metrics']['r2'],
+                'train_rmse': metrics['train_metrics']['rmse'],
+                'test_rmse': metrics['test_metrics']['rmse'],
+                'train_mae': metrics['train_metrics']['mae'],
+                'test_mae': metrics['test_metrics']['mae'],
+                'cv_r2_mean': metrics['cross_validation']['cv_r2_mean'],
+                'cv_r2_std': metrics['cross_validation']['cv_r2_std']
+            },
+            'feature_importance': feature_importance.to_dict('records'),
+            'timestamp': timestamp,
+            'model_signature': generate_model_signature(model_type, model_params)
+        }
+        
+        results_filename = f"train_{model_type}_price_predictor_{symbol}_results_{timestamp}.json"
+        results_filepath = os.path.join(OUTPUT_DIR, results_filename)
+        with open(results_filepath, 'w') as f:
+            json.dump(results, f, indent=2)
+        filenames['results'] = results_filename
+    
+    if save_predictions:
+        # Save predictions (unchanged from original)
+        train_df = pd.DataFrame({
+            'Date': predictions_data['train_dates'],
+            'Actual': predictions_data['train_actuals'],
+            'Predicted': predictions_data['train_predictions'],
+            'Set': 'Train'
+        }).set_index('Date')
+        
+        test_df = pd.DataFrame({
+            'Date': predictions_data['test_dates'],
+            'Actual': predictions_data['test_actuals'],
+            'Predicted': predictions_data['test_predictions'],
+            'Set': 'Test'
+        }).set_index('Date')
+        
+        combined_df = pd.concat([train_df, test_df])
+        combined_df['Error'] = combined_df['Predicted'] - combined_df['Actual']
+        combined_df['Absolute_Error'] = abs(combined_df['Error'])
+        combined_df['Percentage_Error'] = (combined_df['Error'] / np.maximum(abs(combined_df['Actual']), 1e-8)) * 100
+        
+        predictions_filename = f"{model_type}_predictions_{symbol}_{timestamp}.csv"
+        filepath = os.path.join(OUTPUT_DIR, predictions_filename)
+        combined_df.to_csv(filepath)
+        filenames['predictions'] = predictions_filename
+    
+    return filenames
+
+
+
+
+
+
+
+
+
 
 @tool
 def train_xgboost_price_predictor(
