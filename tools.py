@@ -3262,7 +3262,8 @@ def backtest_multiple_models(
                 model_metadata = load_model_metadata(model_file)
                 
                 # Run existing backtesting function (don't save individual results)
-                backtest_result_raw = backtest_model_strategy(
+                # Call the underlying function directly, not through the tool wrapper
+                backtest_result_raw = backtest_model_strategy.func(
                     symbol=symbol,
                     model_file=model_file,
                     strategy_type=strategy_type,
