@@ -2767,17 +2767,47 @@ def calculate_feature_entropy(feature_importance: pd.DataFrame) -> float:
 
 def discover_models(symbol: str, model_filter: Optional[str] = None) -> list:
     """Discover available model files for a symbol."""
+    print(f"🔍 discover_models: Looking for models for symbol '{symbol}' in directory '{OUTPUT_DIR}'")
+    
     if not os.path.exists(OUTPUT_DIR):
+        print(f"❌ discover_models: Output directory '{OUTPUT_DIR}' does not exist")
         return []
     
-    all_files = os.listdir(OUTPUT_DIR)
-    model_files = [f for f in all_files if f.endswith('_model.pkl') and symbol.upper() in f.upper()]
-    
-    if model_filter:
-        model_files = [f for f in model_files if model_filter.lower() in f.lower()]
-    
-    return sorted(model_files)
-
+    try:
+        all_files = os.listdir(OUTPUT_DIR)
+        print(f"📁 discover_models: Found {len(all_files)} total files in directory")
+        
+        # First, find all .pkl files
+        pkl_files = [f for f in all_files if f.endswith('.pkl')]
+        print(f"📦 discover_models: Found {len(pkl_files)} .pkl files")
+        
+        # Then, find model files (containing _model_ and ending with .pkl)
+        model_pkl_files = [f for f in all_files if '_model_' in f and f.endswith('.pkl')]
+        print(f"🤖 discover_models: Found {len(model_pkl_files)} files containing '_model_' and ending with '.pkl'")
+        
+        # Filter for the specific symbol
+        symbol_upper = symbol.upper()
+        model_files = [f for f in model_pkl_files if symbol_upper in f.upper()]
+        print(f"🎯 discover_models: Found {len(model_files)} model files containing '{symbol_upper}':")
+        for f in model_files:
+            print(f"   - {f}")
+        
+        # Apply additional filter if specified
+        if model_filter:
+            print(f"🔍 discover_models: Applying filter '{model_filter}'")
+            filtered_files = [f for f in model_files if model_filter.lower() in f.lower()]
+            print(f"📊 discover_models: After filtering: {len(filtered_files)} files")
+            for f in filtered_files:
+                print(f"   - {f}")
+            model_files = filtered_files
+        
+        result = sorted(model_files)
+        print(f"✅ discover_models: Returning {len(result)} sorted model files")
+        return result
+        
+    except Exception as e:
+        print(f"❌ discover_models: Error accessing directory '{OUTPUT_DIR}': {str(e)}")
+        return []
 
 def load_model_metadata(model_file: str) -> dict:
     """Load model metadata from corresponding JSON result file."""
