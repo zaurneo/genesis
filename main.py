@@ -48,8 +48,8 @@ def main():
     # ENHANCED initial query showcasing new multi-model backtesting capabilities
     initial_query = """Get Apple stock data, apply technical indicators, then use the enhanced scalable ML system with multi-model capabilities to:
 
-1. Get AI-assisted model parameter recommendations for short-term trading
-2. Train multiple models using different algorithms (XGBoost, Random Forest, SVR, etc.) with various parameter configurations
+1. Get AI-assisted model parameter recommendations using get_model_selection_guide for short-term trading
+2. Train multiple models using different algorithms (XGBoost, Random Forest) with various parameter configurations
 3. Use the new backtest_multiple_models tool to compare all models simultaneously
 4. Identify best performers across different criteria (return, Sharpe ratio, drawdown)
 5. Create comprehensive multi-model comparison visualizations showing:
@@ -77,7 +77,7 @@ Then transfer_to_human for more questions about the enhanced multi-model ML capa
         try:
             # Run the graph until interruption or completion
             print("\n" + "="*50)
-            print("🔄 Running enhanced multi-model agent workflow...")
+            print(" Running enhanced multi-model agent workflow...")
             print("="*50)
             
             for chunk in graph.stream(inputs, config=config, stream_mode="updates"):
@@ -102,7 +102,7 @@ Then transfer_to_human for more questions about the enhanced multi-model ML capa
                 print("="*50)
                 print("The enhanced multi-model ML system is ready for your questions or instructions.")
                 print("You can ask about:")
-                print("  • Enhanced scalable ML model training with multiple algorithms")
+                print("  • Enhanced scalable ML model training with XGBoost and Random Forest")
                 print("  • Multi-model backtesting and performance comparison")
                 print("  • AI-assisted parameter selection and validation")
                 print("  • Model ranking and selection based on different criteria")
@@ -152,7 +152,7 @@ Then transfer_to_human for more questions about the enhanced multi-model ML capa
                 print("  • Model performance comparisons and rankings")
                 print("  • Parameter optimization insights across model types")
                 print("  • Backtesting strategy effectiveness analysis")
-                print("  • Adding new model types (SVR, Gradient Boosting, Ridge, Extra Trees)")
+                print("  • Model performance analysis and parameter optimization")
                 print("  • Multi-model ensemble analysis and consensus insights")
                 print("  • Risk-return optimization for different trading goals")
                 print("  • Scalable architecture benefits and model comparison efficiency")
@@ -187,7 +187,7 @@ Then transfer_to_human for more questions about the enhanced multi-model ML capa
                 }
                 
         except KeyboardInterrupt:
-            print("\n\n⚠️  Process interrupted by user. Goodbye!")
+            print("\n\n  Process interrupted by user. Goodbye!")
             break
         except Exception as e:
             print(f"\n❌ An error occurred: {str(e)}")

@@ -13,22 +13,17 @@ from tools import (
     # Enhanced ML training tools
     train_xgboost_price_predictor,
     train_random_forest_price_predictor,
-    # NEW: Additional model types (demonstrating scalability)
-    train_svr_price_predictor,
-    train_gradient_boosting_price_predictor,
-    train_ridge_regression_price_predictor,
-    train_extra_trees_price_predictor,
-    # NEW: Parameter decision and validation tools
-    decide_model_parameters,
+    # Parameter decision and validation tools
     validate_model_parameters,
     get_model_selection_guide,
     # Existing tools
     backtest_model_strategy,
-    # NEW: Multi-model backtesting tools
+    # Multi-model backtesting tools
     backtest_multiple_models,
     visualize_model_comparison_backtesting,
     generate_comprehensive_html_report,
-    visualize_backtesting_results
+    visualize_backtesting_results,
+    debug_file_system
 )
 
 model_gpt = model_gpt_4_1
@@ -77,19 +72,14 @@ stock_analyzer_tools = [
     # Core enhanced ML training tools (using new pipeline)
     train_xgboost_price_predictor,
     train_random_forest_price_predictor,
-    # NEW: Additional model types demonstrating zero-duplication scalability
-    train_svr_price_predictor,
-    train_gradient_boosting_price_predictor,
-    train_ridge_regression_price_predictor,
-    train_extra_trees_price_predictor,
-    # NEW: AI-assisted parameter decision and validation tools
-    decide_model_parameters,
+    # AI-assisted parameter decision and validation tools
     validate_model_parameters,
     get_model_selection_guide,
     # Backtesting and analysis
     backtest_model_strategy,
-    # NEW: Multi-model backtesting and comparison
-    backtest_multiple_models
+    # Multi-model backtesting and comparison
+    backtest_multiple_models,
+    debug_file_system
 ]
 
 stock_analyzer_agent = create_react_agent(

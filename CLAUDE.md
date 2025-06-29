@@ -46,13 +46,13 @@ python3 -c "from agents import stock_data_agent; # test specific functionality"
    - **stock_analyzer_agent**: Trains ML models, performs backtesting
    - **stock_reporter_agent**: Creates visualizations and generates comprehensive analysis reports
 
-3. **Tool Library** (`tools.py`):
-   - Data fetching: `get_yahoo_finance_data`
-   - Technical indicators: `calculate_sma`, `calculate_ema`, `calculate_rsi`, `calculate_macd`, `calculate_bollinger_bands`
-   - ML models: `train_xgboost_model`, `train_random_forest_model`
-   - Backtesting: `backtest_strategy`
-   - Visualization: `create_line_chart`, `create_candlestick_chart`, `create_volume_chart`
-   - File operations: `save_to_csv`, `read_csv`, `save_visualization`, `save_model`, `load_model`
+3. **Tool Library** (`tools/` package):
+   - Data fetching: `fetch_yahoo_finance_data`, `apply_technical_indicators_and_transformations`
+   - ML models: `train_xgboost_price_predictor`, `train_random_forest_price_predictor`
+   - Backtesting: `backtest_model_strategy`, `backtest_multiple_models`
+   - Visualization: `visualize_stock_data`, `visualize_backtesting_results`, `visualize_model_comparison_backtesting`
+   - File operations: `read_csv_data`, `save_text_to_file`, `list_saved_stock_files`
+   - Utilities: `validate_model_parameters`, `get_model_selection_guide`, `debug_file_system`
 
 4. **Model Configuration** (`models.py`):
    - Uses OpenAI GPT-4o-mini as the base LLM
@@ -61,6 +61,7 @@ python3 -c "from agents import stock_data_agent; # test specific functionality"
 ### Key Architectural Patterns
 
 - **Supervisor Pattern**: The supervisor agent manages workflow and delegates tasks to specialized agents
+- **Modular Tool Architecture**: Tools are organized in a refactored package structure with clear separation of concerns
 - **Tool Binding**: Each agent has specific tools bound to it for its specialized tasks
 - **State Management**: Uses LangGraph's state management for tracking conversation and data flow
 - **Output Persistence**: All outputs (data, models, visualizations, reports) saved to `output/` directory
@@ -88,6 +89,28 @@ User Query → Supervisor → Stock Data Agent → Enhanced CSV with indicators
 5. **Agent Communication**: Agents communicate through the supervisor using a standardized message format. Each agent returns results that can be used by subsequent agents in the workflow.
 
 6. **Error Handling**: Tools include validation for data quality, file operations, and API responses. Failed operations are reported back through the agent system.
+
+## Modular Tools Architecture
+
+The tools are organized in a modular package structure for better maintainability:
+
+```
+tools/
+├── __init__.py          # Package initialization and exports
+├── tools.py             # Facade with @tool decorators for LangChain
+├── config/              # Configuration, constants, and schemas
+├── data/                # Data fetching and processing
+├── models/              # ML model training pipeline
+├── backtesting/         # Trading strategy backtesting
+├── visualization/       # Charts and reports
+└── utils/               # File management and utilities
+```
+
+This architecture provides:
+- **Separation of Concerns**: Each module has a focused responsibility
+- **Reusable Components**: Universal training pipeline, base classes
+- **Maintainability**: Easy to extend with new models and features
+- **Backward Compatibility**: All original @tool functions preserved
 
 ## File Structure Conventions
 
