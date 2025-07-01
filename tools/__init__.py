@@ -54,14 +54,28 @@ except ImportError as e:
     log_warning(f"Models module failed to load: {e}")
     _models_loaded = False
 
-# Try to import tools with graceful error handling
+# Try to import submodules with graceful error handling
+_backtesting_loaded = False
+_visualization_loaded = False
+_utils_loaded = False
+
 try:
-    from .tools import *
-    _tools_loaded = True
+    from . import backtesting
+    _backtesting_loaded = True
 except ImportError as e:
-    log_warning(f"Some dependencies not available: {e}")
-    log_info("Core modules (config, data, models) are still available")
-    _tools_loaded = False
+    log_warning(f"Backtesting module failed to load: {e}")
+
+try:
+    from . import visualization
+    _visualization_loaded = True
+except ImportError as e:
+    log_warning(f"Visualization module failed to load: {e}")
+
+try:
+    from . import utils
+    _utils_loaded = True
+except ImportError as e:
+    log_warning(f"Utils module failed to load: {e}")
 
 # Build __all__ list based on successfully loaded modules
 __all__ = []
@@ -71,13 +85,85 @@ if _data_loaded:
     __all__.append("data")
 if _models_loaded:
     __all__.append("models")
+if _backtesting_loaded:
+    __all__.append("backtesting")
+if _visualization_loaded:
+    __all__.append("visualization")
+if _utils_loaded:
+    __all__.append("utils")
 
-if _tools_loaded:
-    # Add tool functions to __all__ if successfully imported
+# Import specific functions from submodules for convenience
+if _data_loaded:
     try:
-        from .tools import __all__ as tools_all
-        __all__.extend(tools_all)
-    except:
+        from .data import (
+            fetch_yahoo_finance_data_impl,
+            get_available_stock_periods_and_intervals_impl,
+            read_csv_data_impl,
+            apply_technical_indicators_and_transformations_impl
+        )
+        __all__.extend([
+            "fetch_yahoo_finance_data_impl",
+            "get_available_stock_periods_and_intervals_impl",
+            "read_csv_data_impl",
+            "apply_technical_indicators_and_transformations_impl"
+        ])
+    except ImportError:
+        pass
+
+if _models_loaded:
+    try:
+        from .models.base import train_model_pipeline
+        __all__.append("train_model_pipeline")
+    except ImportError:
+        pass
+
+if _backtesting_loaded:
+    try:
+        from .backtesting import (
+            backtest_model_strategy_impl,
+            backtest_multiple_models_impl
+        )
+        __all__.extend([
+            "backtest_model_strategy_impl",
+            "backtest_multiple_models_impl"
+        ])
+    except ImportError:
+        pass
+
+if _visualization_loaded:
+    try:
+        from .visualization import (
+            visualize_stock_data_impl,
+            visualize_backtesting_results_impl,
+            visualize_model_comparison_backtesting_impl,
+            generate_comprehensive_html_report_impl
+        )
+        __all__.extend([
+            "visualize_stock_data_impl",
+            "visualize_backtesting_results_impl",
+            "visualize_model_comparison_backtesting_impl",
+            "generate_comprehensive_html_report_impl"
+        ])
+    except ImportError:
+        pass
+
+if _utils_loaded:
+    try:
+        from .utils import (
+            list_saved_stock_files_impl,
+            save_text_to_file_impl,
+            debug_file_system_impl,
+            validate_model_parameters_impl,
+            get_model_selection_guide_impl
+        )
+        __all__.extend([
+            "list_saved_stock_files_impl",
+            "save_text_to_file_impl",
+            "debug_file_system_impl",
+            "validate_model_parameters_impl",
+            "get_model_selection_guide_impl"
+        ])
+    except ImportError:
         pass
 
 log_info(f"Genesis Tools v{__version__} initialized")
