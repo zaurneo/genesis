@@ -128,7 +128,7 @@ def discover_models(symbol: str) -> List[str]:
         all_files = os.listdir(OUTPUT_DIR)
         model_files = [
             f for f in all_files 
-            if f.endswith('_model.pkl') and symbol.upper() in f.upper()
+            if f.endswith('.pkl') and symbol.upper() in f.upper()
         ]
         
         # Sort by modification time (newest first)
