@@ -3,15 +3,32 @@
 import os
 import json
 import pickle
+import sys
 import pandas as pd
 import numpy as np
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Literal
+from pathlib import Path
+
+# Import logging helpers
+try:
+    from ..logs.logging_helpers import log_info, log_success, log_warning, log_error, log_progress, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def log_progress(msg, **kwargs): logger.info(msg)
+    def safe_run(func): return func
 
 from ..config import OUTPUT_DIR, logger
 from .engine import backtest_model_strategy_impl
 
 
+@safe_run
 def backtest_multiple_models_impl(
     symbol: str,
     strategy_type: Literal["threshold", "directional", "percentile"] = "directional",
@@ -36,7 +53,7 @@ def backtest_multiple_models_impl(
     Returns:
         String with comprehensive multi-model comparison results
     """
-    logger.info(f" backtest_multiple_models: Starting multi-model backtesting for {symbol.upper()}...")
+    log_info(f" backtest_multiple_models: Starting multi-model backtesting for {symbol.upper()}...")
     
     try:
         symbol = symbol.upper()
@@ -45,16 +62,16 @@ def backtest_multiple_models_impl(
         model_files = discover_models(symbol)
         if not model_files:
             result = f"backtest_multiple_models: No trained models found for {symbol}"
-            logger.warning(f"backtest_multiple_models: {result}")
+            log_warning(f"backtest_multiple_models: {result}")
             return result
         
-        logger.info(f" backtest_multiple_models: Found {len(model_files)} models for {symbol}")
+        log_info(f" backtest_multiple_models: Found {len(model_files)} models for {symbol}")
         
         all_results = []
         successful_backtests = 0
         
         for i, model_file in enumerate(model_files, 1):
-            logger.info(f"backtest_multiple_models: Backtesting model {i}/{len(model_files)}: {model_file}")
+            log_info(f"backtest_multiple_models: Backtesting model {i}/{len(model_files)}: {model_file}")
             
             try:
                 # Load model metadata
@@ -77,17 +94,17 @@ def backtest_multiple_models_impl(
                     enhanced_result['model_file'] = model_file
                     all_results.append(enhanced_result)
                     successful_backtests += 1
-                    logger.info(f"backtest_multiple_models: Model {i} completed successfully")
+                    log_success(f"backtest_multiple_models: Model {i} completed successfully")
                 else:
-                    logger.error(f"backtest_multiple_models: Error backtesting {model_file}: {backtest_result_raw}")
+                    log_error(f"backtest_multiple_models: Error backtesting {model_file}: {backtest_result_raw}")
                     
             except Exception as e:
-                logger.error(f"backtest_multiple_models: Error backtesting {model_file}: {str(e)}")
+                log_error(f"backtest_multiple_models: Error backtesting {model_file}: {str(e)}")
                 continue
         
         if successful_backtests == 0:
             result = f"backtest_multiple_models: No successful backtests completed for {symbol}"
-            logger.error(f"backtest_multiple_models: {result}")
+            log_error(f"backtest_multiple_models: {result}")
             return result
         
         # Generate comparison analysis
@@ -102,12 +119,12 @@ def backtest_multiple_models_impl(
         # Format summary
         summary = format_multi_model_summary(symbol, strategy_type, successful_backtests, len(model_files), rankings, results_file)
         
-        logger.info(f"backtest_multiple_models: Completed {successful_backtests}/{len(model_files)} backtests for {symbol}")
+        log_success(f"backtest_multiple_models: Completed {successful_backtests}/{len(model_files)} backtests for {symbol}")
         return summary
         
     except Exception as e:
         error_msg = f"backtest_multiple_models: Unexpected error: {str(e)}"
-        logger.error(f"backtest_multiple_models: {error_msg}")
+        log_error(f"backtest_multiple_models: {error_msg}")
         return error_msg
 
 
@@ -137,11 +154,11 @@ def discover_models(symbol: str) -> List[str]:
             reverse=True
         )
         
-        logger.info(f"discover_models: Returning {len(model_files)} sorted model files")
+        log_info(f"discover_models: Returning {len(model_files)} sorted model files")
         return model_files
         
     except Exception as e:
-        logger.error(f"discover_models: Error discovering models: {str(e)}")
+        log_error(f"discover_models: Error discovering models: {str(e)}")
         return []
 
 
@@ -165,7 +182,7 @@ def load_model_metadata(model_file: str) -> Dict[str, Any]:
         if os.path.exists(json_filepath):
             with open(json_filepath, 'r') as f:
                 metadata = json.load(f)
-            logger.debug(f" load_model_metadata: Loaded metadata from JSON for {model_file}")
+            log_debug(f" load_model_metadata: Loaded metadata from JSON for {model_file}")
             return metadata
         
         # Fallback: extract from pickle file
@@ -184,11 +201,11 @@ def load_model_metadata(model_file: str) -> Dict[str, Any]:
         filename_metadata = extract_metadata_from_filename(model_file)
         metadata.update(filename_metadata)
         
-        logger.debug(f" load_model_metadata: Extracted metadata from pickle for {model_file}")
+        log_debug(f" load_model_metadata: Extracted metadata from pickle for {model_file}")
         return metadata
         
     except Exception as e:
-        logger.warning(f"Warning: Could not load metadata for {model_file}: {str(e)}")
+        log_warning(f"Warning: Could not load metadata for {model_file}: {str(e)}")
         return extract_metadata_from_filename(model_file)
 
 
@@ -234,7 +251,7 @@ def extract_metadata_from_filename(filename: str) -> Dict[str, Any]:
         return metadata
         
     except Exception as e:
-        logger.warning(f"Warning: Could not extract metadata from filename {filename}: {str(e)}")
+        log_warning(f"Warning: Could not extract metadata from filename {filename}: {str(e)}")
         return {
             'model_type': 'unknown',
             'symbol': 'unknown', 
@@ -316,7 +333,7 @@ def enhance_with_model_metadata(backtest_result: str, metadata: Dict[str, Any]) 
         return enhanced
         
     except Exception as e:
-        logger.warning(f"Warning: Could not enhance results with metadata: {str(e)}")
+        log_warning(f"Warning: Could not enhance results with metadata: {str(e)}")
         return {
             'model_type': metadata.get('model_type', 'unknown'),
             'total_return': 0.0,
@@ -356,11 +373,11 @@ def generate_model_comparison_matrix(results: List[Dict[str, Any]]) -> pd.DataFr
         # Sort by total return (descending)
         df = df.sort_values('total_return', ascending=False)
         
-        logger.info(f"generate_model_comparison_matrix: Created comparison matrix with {len(df)} models")
+        log_info(f"generate_model_comparison_matrix: Created comparison matrix with {len(df)} models")
         return df
         
     except Exception as e:
-        logger.error(f"generate_model_comparison_matrix: Error creating matrix: {str(e)}")
+        log_error(f"generate_model_comparison_matrix: Error creating matrix: {str(e)}")
         return pd.DataFrame()
 
 
@@ -407,11 +424,11 @@ def calculate_model_rankings(comparison_df: pd.DataFrame) -> Dict[str, Any]:
             }
         }
         
-        logger.info(f"calculate_model_rankings: Calculated rankings for {len(comparison_df)} models")
+        log_info(f"calculate_model_rankings: Calculated rankings for {len(comparison_df)} models")
         return rankings
         
     except Exception as e:
-        logger.error(f"calculate_model_rankings: Error calculating rankings: {str(e)}")
+        log_error(f"calculate_model_rankings: Error calculating rankings: {str(e)}")
         return {}
 
 
@@ -435,11 +452,11 @@ def save_multi_model_results(symbol: str, strategy_type: str, results: List[Dict
         with open(filepath, 'w') as f:
             json.dump(data, f, indent=2, default=str)
         
-        logger.info(f"save_multi_model_results: Saved results to {filename}")
+        log_info(f"save_multi_model_results: Saved results to {filename}")
         return filename
         
     except Exception as e:
-        logger.error(f"save_multi_model_results: Error saving results: {str(e)}")
+        log_error(f"save_multi_model_results: Error saving results: {str(e)}")
         return None
 
 

@@ -9,9 +9,18 @@ from models import model_gpt_4o_mini
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
 from prompts import SUPERVISOR_PROMPT
+from tools.logs.logging_helpers import (
+    setup_logging, log_info, log_success, log_warning, 
+    log_error, log_progress, safe_run
+)
 
+@safe_run
 def main():
     """Main execution function with human-in-the-loop support."""
+    
+    # Initialize logging
+    setup_logging(level="INFO")
+    log_info("Starting Genesis Multi-Agent Stock Analysis System")
     
     # Initialize components
     checkpointer = InMemorySaver()
@@ -39,11 +48,14 @@ def main():
         interrupt_before=["human"]
     )
     
+    # Keep UI prints for user interaction
     print("🤖 Genesis Multi-Agent Stock Analysis System")
     print("=" * 50)
     print("Welcome! I can help you analyze stocks using multiple AI agents.")
     print("Type 'exit', 'quit', or 'bye' to end the session.")
     print("=" * 50)
+    
+    log_info("UI initialized and ready for user interaction")
     
     # ENHANCED initial query showcasing new multi-model backtesting capabilities
     initial_query = """Get Apple stock data, apply technical indicators, then use the enhanced scalable ML system with multi-model capabilities to:
@@ -62,6 +74,7 @@ def main():
 Then transfer_to_human for more questions about the enhanced multi-model ML capabilities."""
     
     print(f"\n🚀 Starting with enhanced multi-model ML showcase: '{initial_query}'")
+    log_info(f"Processing initial query: {initial_query[:100]}...")
     
     # Initialize the conversation
     inputs = {
@@ -79,11 +92,13 @@ Then transfer_to_human for more questions about the enhanced multi-model ML capa
             print("\n" + "="*50)
             print(" Running enhanced multi-model agent workflow...")
             print("="*50)
+            log_progress("Running agent workflow")
             
             for chunk in graph.stream(inputs, config=config, stream_mode="updates"):
                 print(f"\n🤖 Agent Update:")
                 for node_name, messages in chunk.items():
                     print(f"📍 Node: {node_name}")
+                    log_info(f"Processing node: {node_name}")
                     if isinstance(messages, dict) and "messages" in messages:
                         for msg in messages["messages"]:
                             if hasattr(msg, 'pretty_print'):
@@ -120,15 +135,18 @@ Then transfer_to_human for more questions about the enhanced multi-model ML capa
                     user_input = input("\n👤 Your question or request: ").strip()
                 except (EOFError, KeyboardInterrupt):
                     print("\n\n👋 Session ended by user. Goodbye!")
+                    log_info("Session ended by user (EOF/KeyboardInterrupt)")
                     break
                 
                 # Check for exit commands
                 if user_input.lower() in ['exit', 'quit', 'bye', '']:
                     print("\n👋 Thank you for using Genesis Enhanced Multi-Model ML System! Goodbye!")
+                    log_info("User exited normally")
                     break
                 
                 # Continue the conversation with user input
                 print(f"\n📝 Processing your request: '{user_input}'")
+                log_info(f"User input received: {user_input}")
                 
                 # Update the existing state with human response
                 graph.update_state(config, {
@@ -148,6 +166,7 @@ Then transfer_to_human for more questions about the enhanced multi-model ML capa
                 print("\n" + "="*50)
                 print("✅ ENHANCED MULTI-MODEL ML WORKFLOW COMPLETED")
                 print("="*50)
+                log_success("Workflow completed successfully")
                 print("The enhanced multi-model analysis is complete. You can ask additional questions about:")
                 print("  • Model performance comparisons and rankings")
                 print("  • Parameter optimization insights across model types")
@@ -163,15 +182,18 @@ Then transfer_to_human for more questions about the enhanced multi-model ML capa
                     user_input = input("\n👤 Next question or request (or 'exit' to quit): ").strip()
                 except (EOFError, KeyboardInterrupt):
                     print("\n\n👋 Session ended by user. Goodbye!")
+                    log_info("Session ended by user (EOF/KeyboardInterrupt)")
                     break
                 
                 # Check for exit commands
                 if user_input.lower() in ['exit', 'quit', 'bye', '']:
                     print("\n👋 Thank you for using Genesis Enhanced Multi-Model ML System! Goodbye!")
+                    log_info("User exited normally")
                     break
                 
                 # Continue in same session but restart workflow with full context
                 print(f"\n📝 Processing your new request: '{user_input}'")
+                log_info(f"Processing new request: {user_input}")
                 
                 # Get current conversation history and add new message
                 current_state = graph.get_state(config)
@@ -188,10 +210,12 @@ Then transfer_to_human for more questions about the enhanced multi-model ML capa
                 
         except KeyboardInterrupt:
             print("\n\n  Process interrupted by user. Goodbye!")
+            log_info("Session interrupted by user")
             break
         except Exception as e:
             print(f"\n❌ An error occurred: {str(e)}")
             print("You can try asking another question or type 'exit' to quit.")
+            log_error(f"Error in main workflow: {str(e)}", exc_info=True)
             
             # Get user input to continue or exit
             try:
@@ -209,6 +233,7 @@ Then transfer_to_human for more questions about the enhanced multi-model ML capa
                     ]
                 }
             except (EOFError, KeyboardInterrupt):
+                log_info("Session ended during error recovery")
                 break
 
 if __name__ == "__main__":

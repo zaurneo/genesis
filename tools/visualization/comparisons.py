@@ -4,8 +4,24 @@ import os
 import json
 import pandas as pd
 import numpy as np
+import sys
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Literal
+from pathlib import Path
+
+# Import logging helpers
+try:
+    from ..logs.logging_helpers import log_info, log_success, log_warning, log_error, log_progress, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def log_progress(msg, **kwargs): logger.info(msg)
+    def safe_run(func): return func
 
 try:
     import plotly.graph_objects as go
@@ -18,6 +34,7 @@ except ImportError:
 from ..config import OUTPUT_DIR, logger
 
 
+@safe_run
 def visualize_model_comparison_backtesting_impl(
     symbol: str,
     chart_type: Literal["performance_comparison", "parameter_sensitivity", "risk_return_scatter", "model_type_analysis"] = "performance_comparison",
@@ -25,29 +42,22 @@ def visualize_model_comparison_backtesting_impl(
     save_chart: bool = True
 ) -> str:
     """
-    Create comprehensive visualizations comparing multiple model backtesting results.
-    
-    This function creates professional comparison charts to analyze and compare
-    the performance of different models across various metrics and parameters.
+    Create comparative visualizations for multiple model backtesting results.
     
     Args:
-        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
+        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL')
         chart_type: Type of comparison chart to create
-                   - "performance_comparison": Bar charts comparing key metrics
-                   - "parameter_sensitivity": Scatter plot of parameters vs performance
-                   - "risk_return_scatter": Risk vs return scatter plot
-                   - "model_type_analysis": Analysis by model type
-        results_file: Specific multi-model results file (if None, uses most recent)
-        save_chart: Whether to save chart as HTML file
+        results_file: JSON file with multi-model results (optional)
+        save_chart: Whether to save chart to HTML file
         
     Returns:
-        String with chart creation summary and file location
+        String with chart creation results and file location
     """
-    logger.info(f" visualize_model_comparison_backtesting: Creating {chart_type} chart for {symbol.upper()}...")
+    log_info(f"visualize_model_comparison_backtesting: Creating {chart_type} chart for {symbol.upper()}...")
     
     if not _plotly_available:
         error_msg = "Plotly not available. Please install: pip install plotly"
-        logger.error(f"visualize_model_comparison_backtesting: {error_msg}")
+        log_error(f"visualize_model_comparison_backtesting: {error_msg}")
         return error_msg
     
     try:
@@ -64,7 +74,7 @@ def visualize_model_comparison_backtesting_impl(
                            if f.startswith(f"multi_model_backtest_{symbol}_") and f.endswith('.json')]
             if not results_files:
                 result = f"visualize_model_comparison_backtesting: No multi-model results found for {symbol}"
-                logger.error(f"visualize_model_comparison_backtesting: {result}")
+                log_error(f"visualize_model_comparison_backtesting: {result}")
                 return result
             
             latest_file = max(results_files, key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
@@ -72,7 +82,7 @@ def visualize_model_comparison_backtesting_impl(
         
         if not os.path.exists(filepath):
             result = f"visualize_model_comparison_backtesting: Results file not found: {filepath}"
-            logger.error(f"visualize_model_comparison_backtesting: {result}")
+            log_error(f"visualize_model_comparison_backtesting: {result}")
             return result
         
         # Load results data
@@ -82,7 +92,7 @@ def visualize_model_comparison_backtesting_impl(
         comparison_matrix = pd.DataFrame(results_data['comparison_matrix'])
         if comparison_matrix.empty:
             result = f"visualize_model_comparison_backtesting: No comparison data available"
-            logger.error(f"visualize_model_comparison_backtesting: {result}")
+            log_error(f"visualize_model_comparison_backtesting: {result}")
             return result
         
         # Create chart based on type
@@ -96,7 +106,7 @@ def visualize_model_comparison_backtesting_impl(
             fig = create_model_type_analysis_chart(comparison_matrix, symbol)
         else:
             result = f"visualize_model_comparison_backtesting: Invalid chart type '{chart_type}'"
-            logger.error(f"visualize_model_comparison_backtesting: {result}")
+            log_error(f"visualize_model_comparison_backtesting: {result}")
             return result
         
         # Save chart if requested
@@ -134,12 +144,12 @@ def visualize_model_comparison_backtesting_impl(
 - Model type effectiveness comparison
 """
         
-        logger.info(f"visualize_model_comparison_backtesting: Successfully created {chart_type} chart for {symbol}")
+        log_success(f"visualize_model_comparison_backtesting: Successfully created {chart_type} chart for {symbol}")
         return summary
         
     except Exception as e:
         error_msg = f"visualize_model_comparison_backtesting: Error creating chart: {str(e)}"
-        logger.error(f"visualize_model_comparison_backtesting: {error_msg}")
+        log_error(f"visualize_model_comparison_backtesting: {error_msg}")
         return error_msg
 
 

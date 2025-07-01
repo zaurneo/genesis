@@ -1,16 +1,33 @@
 """Data processing and preparation utilities for machine learning models."""
 
 import os
+import sys
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from typing import Optional, Tuple, Dict, Any
+from pathlib import Path
+
+# Import logging helpers
+try:
+    from ..logs.logging_helpers import log_info, log_success, log_warning, log_error, log_progress, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def log_progress(msg, **kwargs): logger.info(msg)
+    def safe_run(func): return func
 
 from ..config import OUTPUT_DIR, logger
 
 
+@safe_run
 def read_csv_data_impl(
     filename: str,
     max_rows: int = 100,
@@ -28,7 +45,7 @@ def read_csv_data_impl(
     Returns:
         String with data summary, statistics, and sample data
     """
-    logger.info(f" read_csv_data: Starting to read CSV file '{filename}'...")
+    log_info(f"read_csv_data: Starting to read CSV file '{filename}'...")
     
     try:
         # Determine file path
@@ -43,7 +60,7 @@ def read_csv_data_impl(
                 result = f"File '{filename}' not found. Available CSV files: {', '.join(available_files) if available_files else 'None'}"
             else:
                 result = f"File not found at path: {file_path}"
-            logger.error(f"read_csv_data: {result}")
+            log_error(f"read_csv_data: {result}")
             return result
         
         # Read the CSV file
@@ -51,7 +68,7 @@ def read_csv_data_impl(
         
         if data.empty:
             result = f"The file '{filename}' is empty."
-            logger.warning(f"read_csv_data: {result}")
+            log_warning(f"read_csv_data: {result}")
             return result
         
         # Calculate comprehensive statistics
@@ -113,12 +130,12 @@ def read_csv_data_impl(
 - Recommendation: {'Ready for advanced analysis' if 'Close' in data.columns and len(data) > 252 else 'Consider fetching more data for better analysis'}
 """
         
-        logger.info(f"read_csv_data: Successfully analyzed {len(data)} records from {filename}")
+        log_success(f"read_csv_data: Successfully analyzed {len(data)} records from {filename}")
         return summary
         
     except Exception as e:
         error_msg = f"read_csv_data: Error reading file '{filename}': {str(e)}"
-        logger.error(f"read_csv_data: {error_msg}")
+        log_error(f"read_csv_data: {error_msg}")
         return error_msg
 
 
@@ -179,7 +196,7 @@ def prepare_model_data(
         - Clean data without excessive missing values
         - Enhanced data file with technical indicators pre-computed
     """
-    logger.info(f" prepare_model_data: Preparing data for {symbol} with {target_days}-day target...")
+    log_info(f"prepare_model_data: Preparing data for {symbol} with {target_days}-day target...")
     
     symbol = symbol.upper()
     
@@ -190,7 +207,7 @@ def prepare_model_data(
         filepath = os.path.join(OUTPUT_DIR, source_file)
         if not os.path.exists(filepath):
             error_msg = f"Source file '{source_file}' not found."
-            logger.error(f"prepare_model_data: {error_msg}")
+            log_error(f"prepare_model_data: {error_msg}")
             return None, error_msg
         data = pd.read_csv(filepath, index_col=0, parse_dates=True)
         data_source = f"file: {source_file}"
@@ -205,12 +222,12 @@ def prepare_model_data(
             data_source = f"enhanced file: {latest_file}"
         else:
             error_msg = f"No enhanced data files found for {symbol}. Please run technical indicators first."
-            logger.error(f"prepare_model_data: {error_msg}")
+            log_error(f"prepare_model_data: {error_msg}")
             return None, error_msg
     
     if data.empty or len(data) < 50:
         error_msg = f"Insufficient data for {symbol}. Need at least 50 records, found {len(data)}."
-        logger.error(f"prepare_model_data: {error_msg}")
+        log_error(f"prepare_model_data: {error_msg}")
         return None, error_msg
     
     # Prepare features and target
@@ -222,7 +239,7 @@ def prepare_model_data(
     
     if len(feature_cols) < 3:
         error_msg = f"Insufficient technical indicators. Found only {len(feature_cols)} features."
-        logger.error(f"prepare_model_data: {error_msg}")
+        log_error(f"prepare_model_data: {error_msg}")
         return None, error_msg
     
     # Remove rows with NaN values
@@ -230,7 +247,7 @@ def prepare_model_data(
     
     if len(model_data) < 30:
         error_msg = f"Insufficient clean data. Only {len(model_data)} records available."
-        logger.error(f"prepare_model_data: {error_msg}")
+        log_error(f"prepare_model_data: {error_msg}")
         return None, error_msg
     
     X = model_data[feature_cols]
@@ -260,7 +277,7 @@ def prepare_model_data(
         'full_y': y
     }
     
-    logger.info(f"prepare_model_data: Successfully prepared {len(X_train)} training and {len(X_test)} test samples")
+    log_success(f"prepare_model_data: Successfully prepared {len(X_train)} training and {len(X_test)} test samples")
     return result_data, None
 
 
@@ -291,7 +308,7 @@ def get_train_test_predictions(model, model_data: Dict[str, Any]) -> Dict[str, A
             - 'train_features': DataFrame of training features
             - 'test_features': DataFrame of test features
     """
-    logger.info("get_train_test_predictions: Generating predictions for train and test sets...")
+    log_info("get_train_test_predictions: Generating predictions for train and test sets...")
     
     train_pred = model.predict(model_data['X_train_scaled'])
     test_pred = model.predict(model_data['X_test_scaled'])
@@ -307,7 +324,7 @@ def get_train_test_predictions(model, model_data: Dict[str, Any]) -> Dict[str, A
         'test_features': model_data['X_test']
     }
     
-    logger.info(f"get_train_test_predictions: Generated {len(train_pred)} training and {len(test_pred)} test predictions")
+    log_success(f"get_train_test_predictions: Generated {len(train_pred)} training and {len(test_pred)} test predictions")
     return predictions
 
 
@@ -342,7 +359,7 @@ def assess_model_metrics(predictions_data: Dict[str, Any], model, model_data: Di
             - 'test_metrics': Test set performance metrics  
             - 'cross_validation': Cross-validation scores and statistics
     """
-    logger.info("assess_model_metrics: Calculating comprehensive performance metrics...")
+    log_info("assess_model_metrics: Calculating comprehensive performance metrics...")
     
     # Extract data
     train_pred = predictions_data['train_predictions']
@@ -401,7 +418,7 @@ def assess_model_metrics(predictions_data: Dict[str, Any], model, model_data: Di
             
         except Exception as e:
             # If model recreation fails, skip this fold
-            logger.warning(f"Cross-validation fold failed: {str(e)}")
+            log_warning(f"Cross-validation fold failed: {str(e)}")
             continue
     
     # Additional metrics
@@ -452,5 +469,5 @@ def assess_model_metrics(predictions_data: Dict[str, Any], model, model_data: Di
         }
     }
     
-    logger.info(f"assess_model_metrics: Calculated metrics with R² {test_r2:.3f} and {len(cv_scores)} CV folds")
+    log_success(f"assess_model_metrics: Calculated metrics with R² {test_r2:.3f} and {len(cv_scores)} CV folds")
     return metrics

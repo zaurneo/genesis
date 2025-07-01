@@ -2,12 +2,29 @@
 
 import os
 import json
+import sys
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+from pathlib import Path
+
+# Import logging helpers
+try:
+    from ..logs.logging_helpers import log_info, log_success, log_warning, log_error, log_progress, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def log_progress(msg, **kwargs): logger.info(msg)
+    def safe_run(func): return func
 
 from ..config import OUTPUT_DIR, logger
 
 
+@safe_run
 def generate_comprehensive_html_report_impl(
     symbol: str,
     title: Optional[str] = None,
@@ -17,25 +34,20 @@ def generate_comprehensive_html_report_impl(
     save_report: bool = True
 ) -> str:
     """
-    Generate a comprehensive HTML report with all analysis, charts, and results.
-    
-    This function creates a professional, interactive HTML document that consolidates
-    all analysis results, charts, and insights into a single comprehensive report
-    suitable for presentations, sharing, or archiving.
+    Generate comprehensive HTML report with all analysis results.
     
     Args:
-        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
-        title: Custom title for the report (if None, uses default)
-        sections: List of sections to include (if None, includes all available)
-                 Options: ['summary', 'data_analysis', 'model_results', 'backtesting', 'charts']
-        include_charts: Whether to embed interactive charts in the report
-        custom_content: Additional custom HTML content to include
-        save_report: Whether to save the report as HTML file
+        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL')
+        title: Report title (optional)
+        sections: Sections to include in report
+        include_charts: Whether to embed charts in report
+        custom_content: Additional custom HTML content
+        save_report: Whether to save report to HTML file
         
     Returns:
-        String with report generation summary and file location
+        String with report generation results and file location
     """
-    logger.info(f" generate_comprehensive_html_report: Creating HTML report for {symbol.upper()}...")
+    log_info(f"generate_comprehensive_html_report: Creating HTML report for {symbol.upper()}...")
     
     try:
         symbol = symbol.upper()
@@ -108,12 +120,12 @@ def generate_comprehensive_html_report_impl(
 - Print or export to PDF using browser functionality
 """
         
-        logger.info(f"generate_comprehensive_html_report: Successfully created report for {symbol}")
+        log_success(f"generate_comprehensive_html_report: Successfully created report for {symbol}")
         return summary
         
     except Exception as e:
         error_msg = f"generate_comprehensive_html_report: Error creating report for {symbol}: {str(e)}"
-        logger.error(f"generate_comprehensive_html_report: {error_msg}")
+        log_error(f"generate_comprehensive_html_report: {error_msg}")
         return error_msg
 
 
@@ -140,7 +152,7 @@ def discover_data_files(symbol: str) -> List[Dict[str, Any]]:
         data_files.sort(key=lambda x: x['modified'], reverse=True)
         
     except Exception as e:
-        logger.warning(f"Warning: Could not discover data files: {str(e)}")
+        log_warning(f"Warning: Could not discover data files: {str(e)}")
     
     return data_files
 
@@ -175,7 +187,7 @@ def discover_model_files(symbol: str) -> List[Dict[str, Any]]:
         model_files.sort(key=lambda x: x['modified'], reverse=True)
         
     except Exception as e:
-        logger.warning(f"Warning: Could not discover model files: {str(e)}")
+        log_warning(f"Warning: Could not discover model files: {str(e)}")
     
     return model_files
 
@@ -217,7 +229,7 @@ def discover_backtest_files(symbol: str) -> List[Dict[str, Any]]:
         backtest_files.sort(key=lambda x: x['modified'], reverse=True)
         
     except Exception as e:
-        logger.warning(f"Warning: Could not discover backtest files: {str(e)}")
+        log_warning(f"Warning: Could not discover backtest files: {str(e)}")
     
     return backtest_files
 
@@ -254,7 +266,7 @@ def discover_chart_files(symbol: str) -> List[Dict[str, Any]]:
         chart_files.sort(key=lambda x: x['modified'], reverse=True)
         
     except Exception as e:
-        logger.warning(f"Warning: Could not discover chart files: {str(e)}")
+        log_warning(f"Warning: Could not discover chart files: {str(e)}")
     
     return chart_files
 

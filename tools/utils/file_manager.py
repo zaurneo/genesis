@@ -3,13 +3,30 @@
 import os
 import json
 import pickle
+import sys
 import pandas as pd
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+from pathlib import Path
+
+# Import logging helpers
+try:
+    from ..logs.logging_helpers import log_info, log_success, log_warning, log_error, log_progress, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def log_progress(msg, **kwargs): logger.info(msg)
+    def safe_run(func): return func
 
 from ..config import OUTPUT_DIR, logger
 
 
+@safe_run
 def list_saved_stock_files_impl() -> str:
     """
     List all saved stock data files and charts in the output directory.
@@ -20,18 +37,18 @@ def list_saved_stock_files_impl() -> str:
     Returns:
         String with detailed file listing and statistics
     """
-    logger.info("list_saved_stock_files: Listing all files in output directory...")
+    log_success(f"list_saved_stock_files: Listing all files in output directory...")
     
     try:
         if not os.path.exists(OUTPUT_DIR):
             result = f"Output directory '{OUTPUT_DIR}' does not exist."
-            logger.warning(f"list_saved_stock_files: {result}")
+            log_warning(f"list_saved_stock_files: {result}")
             return result
         
         files = os.listdir(OUTPUT_DIR)
         if not files:
             result = f"No files found in output directory '{OUTPUT_DIR}'."
-            logger.info(f"list_saved_stock_files: {result}")
+            log_success(f"list_saved_stock_files: {result}")
             return result
         
         # Categorize files
@@ -87,12 +104,12 @@ def list_saved_stock_files_impl() -> str:
 - All files are timestamped for version control
 """
         
-        logger.info(f"list_saved_stock_files: Listed {len(files)} files in output directory")
+        log_success(f"list_saved_stock_files: Listed {len(files)} files in output directory")
         return summary
         
     except Exception as e:
         error_msg = f"list_saved_stock_files: Error listing files: {str(e)}"
-        logger.error(f"list_saved_stock_files: {error_msg}")
+        log_error(f"list_saved_stock_files: {error_msg}")
         return error_msg
 
 
@@ -117,7 +134,7 @@ def save_text_to_file_impl(
     Returns:
         String with save confirmation and file location
     """
-    logger.info(f" save_text_to_file: Saving content to {filename}.{file_format}...")
+    log_info(f" save_text_to_file: Saving content to {filename}.{file_format}...")
     
     try:
         # Ensure filename doesn't have extension
@@ -177,12 +194,12 @@ def save_text_to_file_impl(
 - Compatible with standard text editors and viewers
 """
         
-        logger.info(f"save_text_to_file: Successfully saved {full_filename}")
+        log_success(f"save_text_to_file: Successfully saved {full_filename}")
         return summary
         
     except Exception as e:
         error_msg = f"save_text_to_file: Error saving file '{filename}': {str(e)}"
-        logger.error(f"save_text_to_file: {error_msg}")
+        log_error(f"save_text_to_file: {error_msg}")
         return error_msg
 
 
@@ -200,13 +217,13 @@ def debug_file_system_impl(
     Returns:
         String with detailed file system information
     """
-    logger.info(f" debug_file_system: Starting file system analysis{' for ' + symbol.upper() if symbol else ''}...")
+    log_info(f" debug_file_system: Starting file system analysis{' for ' + symbol.upper() if symbol else ''}...")
     
     try:
         # Check if output directory exists
         if not os.path.exists(OUTPUT_DIR):
             result = f"debug_file_system: Output directory '{OUTPUT_DIR}' does not exist. Creating it now..."
-            logger.warning(f"debug_file_system: {result}")
+            log_warning(f"debug_file_system: {result}")
             os.makedirs(OUTPUT_DIR, exist_ok=True)
             return result + "\\nDirectory created successfully."
         
@@ -215,12 +232,12 @@ def debug_file_system_impl(
             all_files = os.listdir(OUTPUT_DIR)
         except Exception as e:
             result = f"debug_file_system: Error reading output directory: {str(e)}"
-            logger.error(f"debug_file_system: {result}")
+            log_error(f"debug_file_system: {result}")
             return result
         
         if not all_files:
             result = f"debug_file_system: Output directory '{OUTPUT_DIR}' is empty. No files found."
-            logger.info(f"debug_file_system: {result}")
+            log_info(f"debug_file_system: {result}")
             return result
         
         # Categorize files
@@ -263,7 +280,7 @@ def debug_file_system_impl(
                         'extension': file.split('.')[-1] if '.' in file else 'none'
                     })
             except Exception as e:
-                logger.warning(f"Warning: Could not get info for file {file}: {str(e)}")
+                log_warning(f"Warning: Could not get info for file {file}: {str(e)}")
         
         # Sort by modification time (newest first)
         file_details.sort(key=lambda x: x['modified'], reverse=True)
@@ -326,12 +343,12 @@ def debug_file_system_impl(
             except Exception as e:
                 summary += f"\\n\\n📄 CONTENT PREVIEW: Error reading {sample_file['name']}: {str(e)}"
         
-        logger.info(f"debug_file_system: Analyzed {len(all_files)} files in output directory")
+        log_info(f"debug_file_system: Analyzed {len(all_files)} files in output directory")
         return summary
         
     except Exception as e:
         error_msg = f"debug_file_system: Unexpected error: {str(e)}"
-        logger.error(f"debug_file_system: {error_msg}")
+        log_error(f"debug_file_system: {error_msg}")
         return error_msg
 
 
@@ -370,7 +387,7 @@ def discover_files_by_pattern(pattern: str, file_type: Optional[str] = None) -> 
         return matching_files
         
     except Exception as e:
-        logger.error(f"Error discovering files: {str(e)}")
+        log_error(f"Error discovering files: {str(e)}")
         return []
 
 
@@ -444,9 +461,9 @@ def cleanup_old_files(days_old: int = 30, file_pattern: Optional[str] = None) ->
                     os.remove(filepath)
                     files_removed.append(filename)
                     total_size_freed += file_size
-                    logger.info(f"Removed old file: {filename}")
+                    log_info(f"Removed old file: {filename}")
                 except Exception as e:
-                    logger.warning(f"Could not remove {filename}: {str(e)}")
+                    log_warning(f"Could not remove {filename}: {str(e)}")
         
         summary = f"""File cleanup completed:
 - Files removed: {len(files_removed)}
@@ -462,5 +479,5 @@ def cleanup_old_files(days_old: int = 30, file_pattern: Optional[str] = None) ->
         
     except Exception as e:
         error_msg = f"Error during cleanup: {str(e)}"
-        logger.error(error_msg)
+        log_error(error_msg)
         return error_msg

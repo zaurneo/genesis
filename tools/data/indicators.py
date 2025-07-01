@@ -1,10 +1,26 @@
 """Technical indicators calculation and application."""
 
 import os
+import sys
 import pandas as pd
 import numpy as np
 from datetime import datetime
 from typing import Optional, List
+from pathlib import Path
+
+# Import logging helpers
+try:
+    from ..logs.logging_helpers import log_info, log_success, log_warning, log_error, log_progress, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def log_progress(msg, **kwargs): logger.info(msg)
+    def safe_run(func): return func
 
 try:
     import yfinance as yf
@@ -15,6 +31,7 @@ except ImportError:
 from ..config import OUTPUT_DIR, logger
 
 
+@safe_run
 def apply_technical_indicators_and_transformations_impl(
     symbol: str,
     indicators: str = "sma_20,ema_12,rsi,macd,bollinger,volume_sma",
@@ -51,7 +68,7 @@ def apply_technical_indicators_and_transformations_impl(
     Returns:
         String description of applied indicators and file location
     """
-    logger.info(f" apply_technical_indicators_and_transformations: Starting to apply indicators for {symbol.upper()}...")
+    log_info(f"apply_technical_indicators_and_transformations: Starting to apply indicators for {symbol.upper()}...")
     
     try:
         symbol = symbol.upper()
@@ -63,7 +80,7 @@ def apply_technical_indicators_and_transformations_impl(
             filepath = os.path.join(OUTPUT_DIR, source_file)
             if not os.path.exists(filepath):
                 result = f"apply_technical_indicators_and_transformations: Source file '{source_file}' not found in output directory."
-                logger.error(f"apply_technical_indicators_and_transformations: {result}")
+                log_error(f"apply_technical_indicators_and_transformations: {result}")
                 return result
             data = pd.read_csv(filepath, index_col=0, parse_dates=True)
             data_source = f"file: {source_file}"
@@ -79,7 +96,7 @@ def apply_technical_indicators_and_transformations_impl(
                 # Fetch new data
                 if not _yfinance_available:
                     result = f"apply_technical_indicators_and_transformations: yfinance not available and no existing data found for {symbol}."
-                    logger.error(f"apply_technical_indicators_and_transformations: {result}")
+                    log_error(f"apply_technical_indicators_and_transformations: {result}")
                     return result
                 ticker = yf.Ticker(symbol)
                 data = ticker.history(period=period)
@@ -87,7 +104,7 @@ def apply_technical_indicators_and_transformations_impl(
         
         if data.empty:
             result = f"apply_technical_indicators_and_transformations: No data available for {symbol}."
-            logger.error(f"apply_technical_indicators_and_transformations: {result}")
+            log_error(f"apply_technical_indicators_and_transformations: {result}")
             return result
         
         # Create a copy to avoid modifying original data
@@ -190,12 +207,12 @@ def apply_technical_indicators_and_transformations_impl(
 - Can be used directly by stock_analyzer for enhanced charting
 """
         
-        logger.info(f"apply_technical_indicators_and_transformations: Successfully applied {len(applied_indicators)} indicators for {symbol}")
+        log_success(f"apply_technical_indicators_and_transformations: Successfully applied {len(applied_indicators)} indicators for {symbol}")
         return summary
         
     except Exception as e:
         error_msg = f"apply_technical_indicators_and_transformations: Error processing {symbol}: {str(e)}"
-        logger.error(f"apply_technical_indicators_and_transformations: {error_msg}")
+        log_error(f"apply_technical_indicators_and_transformations: {error_msg}")
         return error_msg
 
 

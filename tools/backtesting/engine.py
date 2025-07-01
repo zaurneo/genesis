@@ -3,15 +3,31 @@
 import os
 import pickle
 import json
+import sys
 import pandas as pd
 import numpy as np
 from datetime import datetime
 from typing import Optional, Dict, Any, Literal
+from pathlib import Path
+
+# Import logging helpers
+try:
+    from ..logs.logging_helpers import log_info, log_success, log_warning, log_error, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def safe_run(func): return func  # No-op decorator if not available
 
 from ..config import OUTPUT_DIR, logger
 from ..data import prepare_model_data
 
 
+@safe_run
 def backtest_model_strategy_impl(
     symbol: str,
     model_file: str,
@@ -41,7 +57,7 @@ def backtest_model_strategy_impl(
     Returns:
         String with comprehensive backtesting results and performance metrics
     """
-    logger.info(f"backtest_model_strategy: Starting backtesting for {symbol.upper()} using {strategy_type} strategy...")
+    log_info(f"backtest_model_strategy: Starting backtesting for {symbol.upper()} using {strategy_type} strategy...")
     
     try:
         symbol = symbol.upper()
@@ -54,7 +70,7 @@ def backtest_model_strategy_impl(
         if not os.path.exists(model_filepath):
             available_models = [f for f in os.listdir(OUTPUT_DIR) if f.endswith('_model.pkl')]
             result = f"backtest_model_strategy: Model file '{model_file}' not found. Available models: {', '.join(available_models)}"
-            logger.error(f"backtest_model_strategy: {result}")
+            log_error(f"backtest_model_strategy: {result}")
             return result
         
         with open(model_filepath, 'rb') as f:
@@ -77,14 +93,14 @@ def backtest_model_strategy_impl(
                             and f.endswith('.csv')]
             if not enhanced_files:
                 result = f"backtest_model_strategy: No enhanced data files found for {symbol}"
-                logger.error(f"backtest_model_strategy: {result}")
+                log_error(f"backtest_model_strategy: {result}")
                 return result
             latest_file = max(enhanced_files, key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
             data_filepath = os.path.join(OUTPUT_DIR, latest_file)
         
         if not os.path.exists(data_filepath):
             result = f"backtest_model_strategy: Data file not found: {data_filepath}"
-            logger.error(f"backtest_model_strategy: {result}")
+            log_error(f"backtest_model_strategy: {result}")
             return result
         
         # Load and prepare data
@@ -94,7 +110,7 @@ def backtest_model_strategy_impl(
         missing_features = [col for col in feature_cols if col not in data.columns]
         if missing_features:
             result = f"backtest_model_strategy: Missing features in data: {missing_features}"
-            logger.error(f"backtest_model_strategy: {result}")
+            log_error(f"backtest_model_strategy: {result}")
             return result
         
         # Prepare features for prediction
@@ -103,7 +119,7 @@ def backtest_model_strategy_impl(
         
         if len(features) < 30:
             result = f"backtest_model_strategy: Insufficient data for backtesting: {len(features)} rows"
-            logger.error(f"backtest_model_strategy: {result}")
+            log_error(f"backtest_model_strategy: {result}")
             return result
         
         # Scale features and generate predictions
@@ -237,12 +253,12 @@ def backtest_model_strategy_impl(
 - Consistency: {'High' if win_rate > 60 else 'Medium' if win_rate > 50 else 'Low'}
 """
         
-        logger.info(f"backtest_model_strategy: Completed backtesting for {symbol} with {total_return:+.2f}% return")
+        log_success(f"backtest_model_strategy: Completed backtesting for {symbol} with {total_return:+.2f}% return")
         return summary
         
     except Exception as e:
         error_msg = f"backtest_model_strategy: Error backtesting {symbol}: {str(e)}"
-        logger.error(f"backtest_model_strategy: {error_msg}")
+        log_error(f"backtest_model_strategy: {error_msg}")
         return error_msg
 
 

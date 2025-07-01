@@ -4,8 +4,24 @@ import os
 import json
 import pandas as pd
 import numpy as np
+import sys
 from datetime import datetime
 from typing import Optional, Literal
+from pathlib import Path
+
+# Import logging helpers
+try:
+    from ..logs.logging_helpers import log_info, log_success, log_warning, log_error, log_progress, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def log_progress(msg, **kwargs): logger.info(msg)
+    def safe_run(func): return func
 
 try:
     import plotly.graph_objects as go
@@ -18,6 +34,7 @@ except ImportError:
 from ..config import OUTPUT_DIR, logger
 
 
+@safe_run
 def visualize_backtesting_results_impl(
     symbol: str,
     chart_type: Literal["portfolio_performance", "trading_signals", "model_predictions", "combined"] = "combined",
@@ -25,29 +42,22 @@ def visualize_backtesting_results_impl(
     save_chart: bool = True
 ) -> str:
     """
-    Create comprehensive visualizations of backtesting results.
-    
-    This function creates detailed charts showing how well trading strategies
-    performed, including portfolio value, trading signals, and prediction accuracy.
+    Create visualizations for backtesting results and trading performance.
     
     Args:
-        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
-        chart_type: Type of backtesting chart to create
-                   - "portfolio_performance": Portfolio value vs benchmark over time
-                   - "trading_signals": Buy/sell signals overlaid on price chart
-                   - "model_predictions": Model predictions vs actual prices
-                   - "combined": All charts in subplots (RECOMMENDED)
-        results_file: Specific backtesting results file (if None, uses most recent)
-        save_chart: Whether to save chart as HTML file
+        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL')
+        chart_type: Type of chart to create
+        results_file: JSON file with backtesting results (optional)
+        save_chart: Whether to save chart to HTML file
         
     Returns:
-        String with chart creation summary and file location
+        String with chart creation results and file location
     """
-    logger.info(f" visualize_backtesting_results: Creating {chart_type} chart for {symbol.upper()}...")
+    log_info(f"visualize_backtesting_results: Creating {chart_type} chart for {symbol.upper()}...")
     
     if not _plotly_available:
         error_msg = "Plotly not available. Please install: pip install plotly"
-        logger.error(f"visualize_backtesting_results: {error_msg}")
+        log_error(f"visualize_backtesting_results: {error_msg}")
         return error_msg
     
     try:
@@ -64,7 +74,7 @@ def visualize_backtesting_results_impl(
                            if f.startswith(f"backtest_{symbol}_") and f.endswith('.json')]
             if not results_files:
                 result = f"visualize_backtesting_results: No backtesting results found for {symbol}"
-                logger.error(f"visualize_backtesting_results: {result}")
+                log_error(f"visualize_backtesting_results: {result}")
                 return result
             
             latest_file = max(results_files, key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
@@ -72,7 +82,7 @@ def visualize_backtesting_results_impl(
         
         if not os.path.exists(filepath):
             result = f"visualize_backtesting_results: Results file not found: {filepath}"
-            logger.error(f"visualize_backtesting_results: {result}")
+            log_error(f"visualize_backtesting_results: {result}")
             return result
         
         # Load results data
@@ -85,7 +95,7 @@ def visualize_backtesting_results_impl(
         
         if signals_df.empty:
             result = f"visualize_backtesting_results: No signal data available"
-            logger.error(f"visualize_backtesting_results: {result}")
+            log_error(f"visualize_backtesting_results: {result}")
             return result
         
         # Create chart based on type
@@ -99,7 +109,7 @@ def visualize_backtesting_results_impl(
             fig = create_combined_backtesting_chart(signals_df, results_data, symbol)
         else:
             result = f"visualize_backtesting_results: Invalid chart type '{chart_type}'"
-            logger.error(f"visualize_backtesting_results: {result}")
+            log_error(f"visualize_backtesting_results: {result}")
             return result
         
         # Save chart if requested
@@ -139,12 +149,12 @@ def visualize_backtesting_results_impl(
 - Prediction Accuracy: Model vs actual price comparison
 """
         
-        logger.info(f"visualize_backtesting_results: Successfully created {chart_type} chart for {symbol}")
+        log_success(f"visualize_backtesting_results: Successfully created {chart_type} chart for {symbol}")
         return summary
         
     except Exception as e:
         error_msg = f"visualize_backtesting_results: Error creating chart: {str(e)}"
-        logger.error(f"visualize_backtesting_results: {error_msg}")
+        log_error(f"visualize_backtesting_results: {error_msg}")
         return error_msg
 
 

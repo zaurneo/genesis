@@ -3,11 +3,33 @@
 import os
 import pickle
 import json
+import sys
 import pandas as pd
 import numpy as np
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, Callable
 from datetime import datetime
+
+# Import logging helpers
+import sys
+from pathlib import Path
+
+# Add parent directory to path to import logging_helpers
+parent_dir = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(parent_dir))
+
+try:
+    from tools.logs.logging_helpers import log_info, log_success, log_warning, log_error, log_progress, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def log_progress(msg, **kwargs): logger.info(msg)
+    def safe_run(func): return func  # No-op decorator if not available
 
 from ..config import OUTPUT_DIR, logger
 from ..data import prepare_model_data, get_train_test_predictions, assess_model_metrics
@@ -41,38 +63,38 @@ class BaseModelTrainer(ABC):
             self.symbol, source_file, target_days, test_size
         )
         if error:
-            logger.error(f"Data preparation failed: {error}")
+            log_error(f"Data preparation failed: {error}")
             return False
         return True
     
     def train(self) -> bool:
         """Train the model."""
         if not self.model_data:
-            logger.error("No data prepared for training")
+            log_error("No data prepared for training")
             return False
             
         try:
             self.model = self.create_model()
             self.model.fit(self.model_data['X_train_scaled'], self.model_data['y_train'])
-            logger.info(f"Model {self.model_type} trained successfully")
+            log_success(f"Model {self.model_type} trained successfully")
             return True
         except Exception as e:
-            logger.error(f"Training failed: {str(e)}")
+            log_error(f"Training failed: {str(e)}")
             return False
     
     def evaluate(self) -> bool:
         """Evaluate the trained model."""
         if not self.model or not self.model_data:
-            logger.error("Model or data not available for evaluation")
+            log_error("Model or data not available for evaluation")
             return False
             
         try:
             self.predictions = get_train_test_predictions(self.model, self.model_data)
             self.metrics = assess_model_metrics(self.predictions, self.model, self.model_data)
-            logger.info(f"Model {self.model_type} evaluated successfully")
+            log_success(f"Model {self.model_type} evaluated successfully")
             return True
         except Exception as e:
-            logger.error(f"Evaluation failed: {str(e)}")
+            log_error(f"Evaluation failed: {str(e)}")
             return False
     
     def get_feature_importance(self) -> pd.DataFrame:
@@ -96,10 +118,11 @@ class BaseModelTrainer(ABC):
             return feature_importance
             
         except Exception as e:
-            logger.error(f"Feature importance extraction failed: {str(e)}")
+            log_error(f"Feature importance extraction failed: {str(e)}")
             return pd.DataFrame()
 
 
+@safe_run
 def train_model_pipeline(
     symbol: str,
     model_type: str,
@@ -132,7 +155,7 @@ def train_model_pipeline(
     Returns:
         Comprehensive training summary string
     """
-    logger.info(f"train_model_pipeline: Starting {model_type} training for {symbol}...")
+    log_info(f"train_model_pipeline: Starting {model_type} training for {symbol}...")
     
     try:
         symbol = symbol.upper()
@@ -141,7 +164,7 @@ def train_model_pipeline(
         model_data, error = prepare_model_data(symbol, source_file, target_days, test_size)
         if error:
             error_msg = f"train_model_pipeline: Data preparation failed: {error}"
-            logger.error(f"{error_msg}")
+            log_error(f"{error_msg}")
             return error_msg
         
         # Create model using factory function
@@ -191,12 +214,12 @@ def train_model_pipeline(
             model_params, target_days, filenames
         )
         
-        logger.info(f"train_model_pipeline: Successfully trained {model_type} for {symbol}")
+        log_success(f"train_model_pipeline: Successfully trained {model_type} for {symbol}")
         return summary
         
     except Exception as e:
         error_msg = f"train_model_pipeline: Unexpected error training {model_type} for {symbol}: {str(e)}"
-        logger.error(f"{error_msg}")
+        log_error(f"{error_msg}")
         return error_msg
 
 

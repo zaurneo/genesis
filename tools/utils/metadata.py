@@ -4,20 +4,36 @@ import os
 import json
 import pickle
 import re
+import sys
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+from pathlib import Path
+
+# Import logging helpers
+try:
+    from ..logs.logging_helpers import log_info, log_success, log_warning, log_error, log_progress, log_debug, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def log_progress(msg, **kwargs): logger.info(msg)
+    def log_debug(msg, **kwargs): logger.debug(msg)
+    def safe_run(func): return func
 
 from ..config import OUTPUT_DIR, logger
 
 
+@safe_run
 def extract_metadata_from_filename(filename: str) -> Dict[str, Any]:
     """
-    Extract metadata from model filename patterns.
-    
-    Expected pattern: train_{model_type}_price_predictor_{symbol}_model_{timestamp}.pkl
+    Extract metadata information from model filename.
     
     Args:
-        filename: Model filename
+        filename: Model filename to parse
         
     Returns:
         Dictionary with extracted metadata
@@ -54,11 +70,11 @@ def extract_metadata_from_filename(filename: str) -> Dict[str, Any]:
         if len(parts) > 0:
             metadata['training_type'] = parts[0]
         
-        logger.debug(f"Extracted metadata from {filename}: {metadata}")
+        log_debug(f"Extracted metadata from {filename}: {metadata}")
         return metadata
         
     except Exception as e:
-        logger.warning(f"Warning: Could not extract metadata from filename {filename}: {str(e)}")
+        log_warning(f"Warning: Could not extract metadata from filename {filename}: {str(e)}")
         return {
             'model_type': 'unknown',
             'symbol': 'unknown', 
@@ -106,7 +122,7 @@ def extract_symbol_from_filename(filename: str) -> str:
         return 'unknown'
         
     except Exception as e:
-        logger.warning(f"Warning: Could not extract symbol from {filename}: {str(e)}")
+        log_warning(f"Warning: Could not extract symbol from {filename}: {str(e)}")
         return 'unknown'
 
 
@@ -138,7 +154,7 @@ def extract_timestamp_from_filename(filename: str) -> str:
         return 'unknown'
         
     except Exception as e:
-        logger.warning(f"Warning: Could not extract timestamp from {filename}: {str(e)}")
+        log_warning(f"Warning: Could not extract timestamp from {filename}: {str(e)}")
         return 'unknown'
 
 
@@ -167,11 +183,11 @@ def generate_model_signature(model_type: str, symbol: str, params: Dict[str, Any
         # Clean signature (remove spaces, special chars)
         signature = re.sub(r'[^a-zA-Z0-9_]', '', signature)
         
-        logger.debug(f"Generated signature: {signature}")
+        log_debug(f"Generated signature: {signature}")
         return signature
         
     except Exception as e:
-        logger.warning(f"Warning: Could not generate signature: {str(e)}")
+        log_warning(f"Warning: Could not generate signature: {str(e)}")
         return f"{model_type}_{symbol}_error"
 
 
@@ -212,7 +228,7 @@ def get_key_parameters(model_type: str, params: Dict[str, Any]) -> Dict[str, Any
         return key_params
         
     except Exception as e:
-        logger.warning(f"Warning: Could not extract key parameters: {str(e)}")
+        log_warning(f"Warning: Could not extract key parameters: {str(e)}")
         return {}
 
 
@@ -237,10 +253,10 @@ def load_model_metadata(model_file: str) -> Dict[str, Any]:
             try:
                 with open(json_filepath, 'r') as f:
                     metadata = json.load(f)
-                logger.debug(f" load_model_metadata: Loaded metadata from JSON for {model_file}")
+                log_debug(f" load_model_metadata: Loaded metadata from JSON for {model_file}")
                 return metadata
             except Exception as e:
-                logger.warning(f"Warning: Could not load JSON metadata: {str(e)}")
+                log_warning(f"Warning: Could not load JSON metadata: {str(e)}")
         
         # Fallback: extract from pickle file
         if os.path.exists(model_filepath):
@@ -260,18 +276,18 @@ def load_model_metadata(model_file: str) -> Dict[str, Any]:
                 filename_metadata = extract_metadata_from_filename(model_file)
                 metadata.update(filename_metadata)
                 
-                logger.debug(f" load_model_metadata: Extracted metadata from pickle for {model_file}")
+                log_debug(f" load_model_metadata: Extracted metadata from pickle for {model_file}")
                 return metadata
                 
             except Exception as e:
-                logger.warning(f"Warning: Could not load pickle metadata: {str(e)}")
+                log_warning(f"Warning: Could not load pickle metadata: {str(e)}")
         
         # Last resort: extract from filename only
-        logger.warning(f"Warning: Using filename-only metadata for {model_file}")
+        log_warning(f"Warning: Using filename-only metadata for {model_file}")
         return extract_metadata_from_filename(model_file)
         
     except Exception as e:
-        logger.warning(f"Warning: Could not load metadata for {model_file}: {str(e)}")
+        log_warning(f"Warning: Could not load metadata for {model_file}: {str(e)}")
         return extract_metadata_from_filename(model_file)
 
 
@@ -326,7 +342,7 @@ def create_metadata_summary(metadata: Dict[str, Any]) -> str:
         return " | ".join(summary_lines)
         
     except Exception as e:
-        logger.warning(f"Warning: Could not create metadata summary: {str(e)}")
+        log_warning(f"Warning: Could not create metadata summary: {str(e)}")
         return "Metadata summary unavailable"
 
 
@@ -366,22 +382,22 @@ def validate_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
         # Validation checks
         if validated['target_days'] < 1 or validated['target_days'] > 365:
             validated['target_days'] = 1
-            logger.warning("Invalid target_days, reset to 1")
+            log_warning("Invalid target_days, reset to 1")
         
         if validated['features_count'] < 0:
             validated['features_count'] = 0
-            logger.warning("Invalid features_count, reset to 0")
+            log_warning("Invalid features_count, reset to 0")
         
         # Validate symbol format
         symbol = validated['symbol']
         if not re.match(r'^[A-Z]{1,5}$', symbol) and symbol != 'UNKNOWN':
             validated['symbol'] = 'UNKNOWN'
-            logger.warning(f"Invalid symbol format: {symbol}, reset to UNKNOWN")
+            log_warning(f"Invalid symbol format: {symbol}, reset to UNKNOWN")
         
         return validated
         
     except Exception as e:
-        logger.error(f"Error validating metadata: {str(e)}")
+        log_error(f"Error validating metadata: {str(e)}")
         return {
             'model_type': 'unknown',
             'symbol': 'unknown',
@@ -449,5 +465,5 @@ def find_related_files(base_filename: str) -> Dict[str, List[str]]:
         return related
         
     except Exception as e:
-        logger.error(f"Error finding related files: {str(e)}")
+        log_error(f"Error finding related files: {str(e)}")
         return {}

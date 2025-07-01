@@ -7,6 +7,28 @@ from abc import ABC, abstractmethod
 
 class BaseTradingStrategy(ABC):
     """Abstract base class for trading strategies."""
+
+# Import logging helpers
+import sys
+from pathlib import Path
+
+# Add parent directory to path to import logging_helpers
+parent_dir = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(parent_dir))
+
+try:
+    from tools.logs.logging_helpers import log_info, log_success, log_warning, log_error, log_progress, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def log_progress(msg, **kwargs): logger.info(msg)
+    def safe_run(func): return func
+
     
     def __init__(self, **params):
         self.params = params

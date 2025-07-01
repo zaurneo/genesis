@@ -1,6 +1,25 @@
 import inspect
+import sys
+from pathlib import Path
 from typing import Any, Callable, Literal, Optional, Sequence, Type, Union, cast, get_args
 from uuid import UUID, uuid5
+
+# Add parent directory to path to import logging_helpers
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+try:
+    from tools.logs.logging_helpers import log_info, log_success, log_warning, log_error, log_progress, get_logger
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to print if logging_helpers not available
+    def log_info(msg, **kwargs): print(f"INFO: {msg}")
+    def log_success(msg, **kwargs): print(f"SUCCESS: {msg}")
+    def log_warning(msg, **kwargs): print(f"WARNING: {msg}")
+    def log_error(msg, **kwargs): print(f"ERROR: {msg}")
+    def log_progress(msg, **kwargs): print(f"PROGRESS: {msg}")
+    def get_logger(name=None): return None
 
 from langchain_core.language_models import BaseChatModel, LanguageModelLike
 from langchain_core.runnables import RunnableConfig
@@ -365,6 +384,10 @@ def create_supervisor(
         })
         ```
     """
+    # Initialize logging for supervisor creation
+    logger = get_logger(__name__)
+    log_info(f"Creating supervisor with {len(agents)} agents: {[agent.name for agent in agents]}")
+    
     if add_handoff_back_messages is None:
         add_handoff_back_messages = add_handoff_messages
 
@@ -388,6 +411,8 @@ def create_supervisor(
 
         agent_names.add(agent.name)
 
+    log_success(f"Validated {len(agent_names)} agents with unique names")
+    
     # Add human proxy to agent names if provided
     if human_proxy:
         if human_proxy in agent_names:

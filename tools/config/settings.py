@@ -1,10 +1,13 @@
 """Configuration management for the stock analyzer package."""
 
 import os
-import logging
+import sys
+sys.path.append('../..')  # Add parent directory to path
+from tools.logs.logging_helpers import setup_logging as setup_logging_helper, get_logger
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
+import logging
 
 from .constants import OUTPUT_DIR, LOG_FORMAT, LOG_DATE_FORMAT
 
@@ -61,30 +64,19 @@ class StockAnalyzerSettings:
             self.cache_dir.mkdir(exist_ok=True)
     
     def setup_logging(self) -> logging.Logger:
-        """Setup logging configuration."""
-        handlers = []
-        
-        # Console handler
-        if self.enable_console_logging:
-            console_handler = logging.StreamHandler()
-            console_handler.setLevel(self.log_level)
-            console_formatter = logging.Formatter(self.log_format, self.log_date_format)
-            console_handler.setFormatter(console_formatter)
-            handlers.append(console_handler)
-        
-        # File handler
+        """Setup logging configuration using the bulletproof logging_helpers."""
+        # Ensure log directory exists
         if self.enable_file_logging:
             log_file = self.log_dir / "stock_analyzer.log"
-            file_handler = logging.FileHandler(log_file)
-            file_handler.setLevel(self.log_level)
-            file_formatter = logging.Formatter(self.log_format, self.log_date_format)
-            file_handler.setFormatter(file_formatter)
-            handlers.append(file_handler)
+        else:
+            log_file = None
         
-        # Configure root logger
-        logging.basicConfig(
+        # Use the bulletproof setup_logging from tools.logs.logging_helpers
+        setup_logging_helper(
             level=self.log_level,
-            handlers=handlers,
+            log_file=str(log_file) if log_file else None,
+            log_format=self.log_format,
+            date_format=self.log_date_format,
             force=True  # Override any existing configuration
         )
         

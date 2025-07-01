@@ -1,9 +1,31 @@
 """Data fetching functionality for stock data retrieval."""
 
 import os
+import sys
 import pandas as pd
 from datetime import datetime
 from typing import Optional
+
+# Import logging helpers
+import importlib
+import sys
+from pathlib import Path
+
+# Add parent directory to path to import logging_helpers
+parent_dir = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(parent_dir))
+
+try:
+    from tools.logs.logging_helpers import log_info, log_success, log_warning, log_error, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def safe_run(func): return func  # No-op decorator if not available
 
 try:
     import yfinance as yf
@@ -14,6 +36,7 @@ except ImportError:
 from ..config import OUTPUT_DIR, VALID_PERIODS, VALID_INTERVALS, logger
 
 
+@safe_run
 def fetch_yahoo_finance_data_impl(
     symbol: str,
     period: str = "1y",
@@ -86,11 +109,11 @@ def fetch_yahoo_finance_data_impl(
         - For backtesting: Use 2y-5y period with 1d interval
         - Always save data (save_data=True) for reproducible analysis
     """
-    logger.info(f" fetch_yahoo_finance_data: Starting to fetch data for {symbol.upper()}...")
+    log_info(f"fetch_yahoo_finance_data: Starting to fetch data for {symbol.upper()}...")
     
     if not _yfinance_available:
         error_msg = "yfinance module not available. Please install: pip install yfinance"
-        logger.error(f"fetch_yahoo_finance_data: {error_msg}")
+        log_error(f"fetch_yahoo_finance_data: {error_msg}")
         return error_msg
     
     try:
@@ -100,13 +123,13 @@ def fetch_yahoo_finance_data_impl(
         if period not in VALID_PERIODS:
             available_periods = ', '.join(VALID_PERIODS)
             result = f"fetch_yahoo_finance_data: Invalid period '{period}'. Valid periods: {available_periods}"
-            logger.error(f"fetch_yahoo_finance_data: {result}")
+            log_error(f"fetch_yahoo_finance_data: {result}")
             return result
         
         if interval not in VALID_INTERVALS:
             available_intervals = ', '.join(VALID_INTERVALS)
             result = f"fetch_yahoo_finance_data: Invalid interval '{interval}'. Valid intervals: {available_intervals}"
-            logger.error(f"fetch_yahoo_finance_data: {result}")
+            log_error(f"fetch_yahoo_finance_data: {result}")
             return result
         
         # Create ticker object
@@ -117,13 +140,13 @@ def fetch_yahoo_finance_data_impl(
             data = ticker.history(period=period, interval=interval)
         except Exception as fetch_error:
             result = f"fetch_yahoo_finance_data: Failed to fetch data for {symbol}: {str(fetch_error)}"
-            logger.error(f"fetch_yahoo_finance_data: {result}")
+            log_error(f"fetch_yahoo_finance_data: {result}")
             return result
         
         # Validate data
         if data.empty:
             result = f"fetch_yahoo_finance_data: No data available for symbol '{symbol}' with period '{period}' and interval '{interval}'. Possible reasons: Invalid symbol, market closure, or data not available for the specified period."
-            logger.warning(f"fetch_yahoo_finance_data: {result}")
+            log_warning(f"fetch_yahoo_finance_data: {result}")
             return result
         
         # Check data quality
@@ -201,12 +224,12 @@ def fetch_yahoo_finance_data_impl(
 - Volatility level indicates {'high-risk, high-reward potential' if annualized_volatility > 25 else 'moderate risk profile'}
 """
         
-        logger.info(f"fetch_yahoo_finance_data: Successfully fetched {len(data)} records for {symbol}")
+        log_success(f"fetch_yahoo_finance_data: Successfully fetched {len(data)} records for {symbol}")
         return summary
         
     except Exception as e:
         error_msg = f"fetch_yahoo_finance_data: Unexpected error fetching data for {symbol}: {str(e)}"
-        logger.error(f"fetch_yahoo_finance_data: {error_msg}")
+        log_error(f"fetch_yahoo_finance_data: {error_msg}")
         return error_msg
 
 
@@ -236,7 +259,7 @@ def get_available_stock_periods_and_intervals_impl() -> str:
         - Consider data availability windows when selecting intervals
         - Follow best practices for optimal performance
     """
-    logger.info("get_available_stock_periods_and_intervals: Providing data fetching guidance...")
+    log_info("get_available_stock_periods_and_intervals: Providing data fetching guidance...")
     
     info = f"""get_available_stock_periods_and_intervals: Complete guide to Yahoo Finance data parameters:
 
@@ -326,5 +349,5 @@ Best Practices:
 5. Consider data storage and processing time for large datasets
 """
     
-    logger.info("get_available_stock_periods_and_intervals: Provided comprehensive data fetching guide")
+    log_success("get_available_stock_periods_and_intervals: Provided comprehensive data fetching guide")
     return info

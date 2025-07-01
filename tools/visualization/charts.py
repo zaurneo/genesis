@@ -2,8 +2,24 @@
 
 import os
 import pandas as pd
+import sys
 from datetime import datetime
 from typing import Optional, Literal
+from pathlib import Path
+
+# Import logging helpers
+try:
+    from ..logs.logging_helpers import log_info, log_success, log_warning, log_error, log_progress, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def log_progress(msg, **kwargs): logger.info(msg)
+    def safe_run(func): return func
 
 try:
     import plotly.graph_objects as go
@@ -16,6 +32,7 @@ except ImportError:
 from ..config import OUTPUT_DIR, logger
 
 
+@safe_run
 def visualize_stock_data_impl(
     symbol: str,
     chart_type: Literal["line", "candlestick", "volume", "combined"] = "combined",
@@ -24,30 +41,23 @@ def visualize_stock_data_impl(
     show_indicators: bool = True
 ) -> str:
     """
-    Create interactive visualizations of stock data using Plotly.
-    
-    This function creates professional, interactive charts for stock data analysis
-    with support for multiple chart types and technical indicators overlay.
+    Create interactive stock charts using Plotly with various chart types.
     
     Args:
-        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'TSLA')
-        chart_type: Type of chart to create
-                   - "line": Simple line chart of closing prices
-                   - "candlestick": OHLC candlestick chart
-                   - "volume": Volume bars chart
-                   - "combined": All charts in subplots (RECOMMENDED)
-        source_file: Specific CSV file to use (if None, uses most recent)
-        save_chart: Whether to save chart as HTML file
-        show_indicators: Whether to overlay technical indicators (if available)
+        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL')
+        chart_type: Type of chart to create ('line', 'candlestick', 'volume', 'combined')
+        source_file: CSV file with stock data (optional)
+        save_chart: Whether to save chart to HTML file
+        show_indicators: Whether to include technical indicators
         
     Returns:
-        String with chart creation summary and file location
+        String with chart creation results and file location
     """
-    logger.info(f" visualize_stock_data: Creating {chart_type} chart for {symbol.upper()}...")
+    log_info(f"visualize_stock_data: Creating {chart_type} chart for {symbol.upper()}...")
     
     if not _plotly_available:
         error_msg = "Plotly not available. Please install: pip install plotly"
-        logger.error(f"visualize_stock_data: {error_msg}")
+        log_error(f"visualize_stock_data: {error_msg}")
         return error_msg
     
     try:
@@ -60,7 +70,7 @@ def visualize_stock_data_impl(
             filepath = os.path.join(OUTPUT_DIR, source_file)
             if not os.path.exists(filepath):
                 result = f"visualize_stock_data: Source file '{source_file}' not found."
-                logger.error(f"visualize_stock_data: {result}")
+                log_error(f"visualize_stock_data: {result}")
                 return result
             data = pd.read_csv(filepath, index_col=0, parse_dates=True)
             data_source = source_file
@@ -69,7 +79,7 @@ def visualize_stock_data_impl(
             all_files = [f for f in os.listdir(OUTPUT_DIR) if f.endswith('.csv') and symbol in f.upper()]
             if not all_files:
                 result = f"visualize_stock_data: No data files found for {symbol}."
-                logger.error(f"visualize_stock_data: {result}")
+                log_error(f"visualize_stock_data: {result}")
                 return result
             
             # Prefer enhanced files
@@ -85,7 +95,7 @@ def visualize_stock_data_impl(
         
         if data.empty:
             result = f"visualize_stock_data: No data available in {data_source}."
-            logger.error(f"visualize_stock_data: {result}")
+            log_error(f"visualize_stock_data: {result}")
             return result
         
         # Ensure required columns exist
@@ -98,7 +108,7 @@ def visualize_stock_data_impl(
         missing_cols = [col for col in required_cols if col not in data.columns]
         if missing_cols:
             result = f"visualize_stock_data: Missing required columns: {missing_cols}"
-            logger.error(f"visualize_stock_data: {result}")
+            log_error(f"visualize_stock_data: {result}")
             return result
         
         # Create chart based on type
@@ -112,7 +122,7 @@ def visualize_stock_data_impl(
             fig = create_combined_chart(data, symbol, show_indicators)
         else:
             result = f"visualize_stock_data: Invalid chart type '{chart_type}'"
-            logger.error(f"visualize_stock_data: {result}")
+            log_error(f"visualize_stock_data: {result}")
             return result
         
         # Save chart if requested
@@ -159,12 +169,12 @@ def visualize_stock_data_impl(
 - Perfect for presentations and analysis sharing
 """
         
-        logger.info(f"visualize_stock_data: Successfully created {chart_type} chart for {symbol}")
+        log_success(f"visualize_stock_data: Successfully created {chart_type} chart for {symbol}")
         return summary
         
     except Exception as e:
         error_msg = f"visualize_stock_data: Error creating chart for {symbol}: {str(e)}"
-        logger.error(f"visualize_stock_data: {error_msg}")
+        log_error(f"visualize_stock_data: {error_msg}")
         return error_msg
 
 

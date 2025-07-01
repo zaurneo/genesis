@@ -1,11 +1,28 @@
 """Parameter optimization and validation utilities."""
 
 import numpy as np
+import sys
+from pathlib import Path
 from typing import Dict, Any, Optional, List, Literal
+
+# Import logging helpers
+try:
+    from ..logs.logging_helpers import log_info, log_success, log_warning, log_error, log_progress, safe_run
+    _logging_helpers_available = True
+except ImportError:
+    _logging_helpers_available = False
+    # Fallback to regular logger if logging_helpers not available
+    def log_info(msg, **kwargs): logger.info(msg)
+    def log_success(msg, **kwargs): logger.info(msg)
+    def log_warning(msg, **kwargs): logger.warning(msg) 
+    def log_error(msg, **kwargs): logger.error(msg)
+    def log_progress(msg, **kwargs): logger.info(msg)
+    def safe_run(func): return func
 
 from ..config import PARAMETER_SCHEMAS, MODELING_CONTEXTS, VALIDATION_RULES, logger
 
 
+@safe_run
 def validate_model_parameters_impl(
     model_type: str,
     parameters: Dict[str, Any],
@@ -27,13 +44,13 @@ def validate_model_parameters_impl(
     Returns:
         String with validation results and recommendations
     """
-    logger.info(f" validate_model_parameters: Validating {model_type} parameters...")
+    log_info(f"validate_model_parameters: Validating {model_type} parameters...")
     
     try:
         if model_type not in PARAMETER_SCHEMAS:
             available_types = ', '.join(PARAMETER_SCHEMAS.keys())
             result = f"validate_model_parameters: Unknown model type '{model_type}'. Available: {available_types}"
-            logger.error(f"validate_model_parameters: {result}")
+            log_error(f"validate_model_parameters: {result}")
             return result
         
         schema = PARAMETER_SCHEMAS[model_type]
@@ -98,12 +115,12 @@ def validate_model_parameters_impl(
 - Next Steps: {'Address warnings before training' if warnings else 'Ready for model training'}
 """
         
-        logger.info(f"validate_model_parameters: Validated {len(parameters)} parameters for {model_type}")
+        log_info(f"validate_model_parameters: Validated {len(parameters)} parameters for {model_type}")
         return summary
         
     except Exception as e:
         error_msg = f"validate_model_parameters: Error validating parameters: {str(e)}"
-        logger.error(f"validate_model_parameters: {error_msg}")
+        log_error(f"validate_model_parameters: {error_msg}")
         return error_msg
 
 
@@ -128,13 +145,13 @@ def get_model_selection_guide_impl(
     Returns:
         String with model selection recommendations and reasoning
     """
-    logger.info(f" get_model_selection_guide: Generating recommendations for {context} context...")
+    log_info(f" get_model_selection_guide: Generating recommendations for {context} context...")
     
     try:
         if context not in MODELING_CONTEXTS:
             available_contexts = ', '.join(MODELING_CONTEXTS.keys())
             result = f"get_model_selection_guide: Unknown context '{context}'. Available: {available_contexts}"
-            logger.error(f"get_model_selection_guide: {result}")
+            log_error(f"get_model_selection_guide: {result}")
             return result
         
         context_info = MODELING_CONTEXTS[context]
@@ -205,12 +222,12 @@ def get_model_selection_guide_impl(
 5. Deploy with appropriate risk controls
 """
         
-        logger.info(f"get_model_selection_guide: Generated recommendations for {context} context")
+        log_success(f"get_model_selection_guide: Generated recommendations for {context} context")
         return summary
         
     except Exception as e:
         error_msg = f"get_model_selection_guide: Error generating guide: {str(e)}"
-        logger.error(f"get_model_selection_guide: {error_msg}")
+        log_error(f"get_model_selection_guide: {error_msg}")
         return error_msg
 
 
