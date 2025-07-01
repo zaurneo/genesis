@@ -21,6 +21,17 @@ except ImportError:
     def log_progress(msg, **kwargs): print(f"PROGRESS: {msg}")
     def get_logger(name=None): return None
 
+# Import event tracking
+try:
+    # Add events module to path
+    events_path = parent_dir / "events"
+    sys.path.insert(0, str(events_path.parent))
+    from events import get_event_stream, Event, EventType, validate_output
+    _events_available = True
+except ImportError:
+    _events_available = False
+    log_warning("Event tracking not available - debugging features disabled")
+
 from langchain_core.language_models import BaseChatModel, LanguageModelLike
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
@@ -109,29 +120,107 @@ def _make_call_agent(
 
     def call_agent(state: dict, config: RunnableConfig) -> dict:
         thread_id = config["configurable"].get("thread_id")
-        output = agent.invoke(
-            state,
-            patch_configurable(
-                config,
-                {"thread_id": str(uuid5(UUID(str(thread_id)), agent.name)) if thread_id else None},
+        session_id = str(thread_id) if thread_id else None
+        agent_name = getattr(agent, 'name', 'unknown_agent')
+        
+        # Track agent start
+        if _events_available:
+            get_event_stream().publish(Event(
+                type=EventType.AGENT_STARTED,
+                agent_id=agent_name,
+                session_id=session_id
+            ))
+        
+        try:
+            output = agent.invoke(
+                state,
+                patch_configurable(
+                    config,
+                    {"thread_id": str(uuid5(UUID(str(thread_id)), agent.name)) if thread_id else None},
+                )
+                if isinstance(agent, RemoteGraph)
+                else config,
             )
-            if isinstance(agent, RemoteGraph)
-            else config,
-        )
-        return _process_output(output)
+            
+            # Track agent completion
+            if _events_available:
+                get_event_stream().publish(Event(
+                    type=EventType.AGENT_COMPLETED,
+                    agent_id=agent_name,
+                    session_id=session_id
+                ))
+                
+                # Validate output if it contains messages
+                if 'messages' in output and output['messages']:
+                    content = str(output['messages'][-1].content) if output['messages'] else ""
+                    invalid_event = validate_output(content, agent_name, session_id)
+                    if invalid_event:
+                        get_event_stream().publish(invalid_event)
+            
+            return _process_output(output)
+            
+        except Exception as e:
+            # Track agent failure
+            if _events_available:
+                get_event_stream().publish(Event(
+                    type=EventType.AGENT_FAILED,
+                    agent_id=agent_name,
+                    session_id=session_id,
+                    error=str(e)
+                ))
+            raise
 
     async def acall_agent(state: dict, config: RunnableConfig) -> dict:
         thread_id = config["configurable"].get("thread_id")
-        output = await agent.ainvoke(
-            state,
-            patch_configurable(
-                config,
-                {"thread_id": str(uuid5(UUID(str(thread_id)), agent.name)) if thread_id else None},
+        session_id = str(thread_id) if thread_id else None
+        agent_name = getattr(agent, 'name', 'unknown_agent')
+        
+        # Track agent start
+        if _events_available:
+            get_event_stream().publish(Event(
+                type=EventType.AGENT_STARTED,
+                agent_id=agent_name,
+                session_id=session_id
+            ))
+        
+        try:
+            output = await agent.ainvoke(
+                state,
+                patch_configurable(
+                    config,
+                    {"thread_id": str(uuid5(UUID(str(thread_id)), agent.name)) if thread_id else None},
+                )
+                if isinstance(agent, RemoteGraph)
+                else config,
             )
-            if isinstance(agent, RemoteGraph)
-            else config,
-        )
-        return _process_output(output)
+            
+            # Track agent completion
+            if _events_available:
+                get_event_stream().publish(Event(
+                    type=EventType.AGENT_COMPLETED,
+                    agent_id=agent_name,
+                    session_id=session_id
+                ))
+                
+                # Validate output if it contains messages
+                if 'messages' in output and output['messages']:
+                    content = str(output['messages'][-1].content) if output['messages'] else ""
+                    invalid_event = validate_output(content, agent_name, session_id)
+                    if invalid_event:
+                        get_event_stream().publish(invalid_event)
+            
+            return _process_output(output)
+            
+        except Exception as e:
+            # Track agent failure
+            if _events_available:
+                get_event_stream().publish(Event(
+                    type=EventType.AGENT_FAILED,
+                    agent_id=agent_name,
+                    session_id=session_id,
+                    error=str(e)
+                ))
+            raise
 
     return RunnableCallable(call_agent, acall_agent)
 
@@ -340,7 +429,7 @@ def create_supervisor(
         ```python
         from langchain_openai import ChatOpenAI
 
-        from langgraph_supervisor import create_supervisor
+        from supervisor.supervisor import create_supervisor
         from langgraph.prebuilt import create_react_agent
 
         # Create specialized agents

@@ -14,6 +14,13 @@ from tools.logs.logging_helpers import (
     log_error, log_progress, safe_run
 )
 
+# Import event tracking for debugging
+try:
+    from events import diagnose_missing_sections
+    _events_available = True
+except ImportError:
+    _events_available = False
+
 @safe_run
 def main():
     """Main execution function with human-in-the-loop support."""
@@ -216,6 +223,15 @@ Then transfer_to_human for more questions about the enhanced multi-model ML capa
             print(f"\n❌ An error occurred: {str(e)}")
             print("You can try asking another question or type 'exit' to quit.")
             log_error(f"Error in main workflow: {str(e)}", exc_info=True)
+            
+            # Show diagnostic information if available
+            if _events_available:
+                session_id = str(config.get('configurable', {}).get('thread_id', ''))
+                if session_id:
+                    print("\n🔍 DEBUG: Workflow Diagnostic Report")
+                    print("-" * 40)
+                    print(diagnose_missing_sections(session_id))
+                    print("-" * 40)
             
             # Get user input to continue or exit
             try:
