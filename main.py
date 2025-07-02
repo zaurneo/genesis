@@ -16,7 +16,7 @@ from tools.logs.logging_helpers import (
 
 # Import event tracking for debugging
 try:
-    from events import diagnose_missing_sections
+    from events import diagnose_missing_sections, get_event_stream, Event, EventType
     _events_available = True
 except ImportError:
     _events_available = False
@@ -34,10 +34,21 @@ def main():
     store = InMemoryStore()
     
     session_id = uuid.uuid4()
+    session_id_str = str(session_id)
     config = {
-        "configurable": {"thread_id": str(session_id)},
+        "configurable": {"thread_id": session_id_str},
         "recursion_limit": 150
     }
+    
+    # Publish supervisor start event
+    if _events_available:
+        event_stream = get_event_stream()
+        event_stream.publish(Event(
+            type=EventType.AGENT_STARTED,
+            agent_id='supervisor',
+            session_id=session_id_str,
+            data={'workflow': 'Genesis Multi-Agent Stock Analysis'}
+        ))
     
     # Create supervisor workflow
     workflow = create_supervisor(
@@ -60,6 +71,7 @@ def main():
     print("=" * 50)
     print("Welcome! I can help you analyze stocks using multiple AI agents.")
     print("Type 'exit', 'quit', or 'bye' to end the session.")
+    print(f"Session ID: {session_id}")
     print("=" * 50)
     
     log_info("UI initialized and ready for user interaction")
@@ -174,6 +186,15 @@ Then transfer_to_human for more questions about the enhanced multi-model ML capa
                 print("✅ ENHANCED MULTI-MODEL ML WORKFLOW COMPLETED")
                 print("="*50)
                 log_success("Workflow completed successfully")
+                
+                # Publish supervisor completion event
+                if _events_available:
+                    event_stream.publish(Event(
+                        type=EventType.AGENT_COMPLETED,
+                        agent_id='supervisor',
+                        session_id=session_id_str,
+                        data={'status': 'workflow_completed', 'result': 'success'}
+                    ))
                 print("The enhanced multi-model analysis is complete. You can ask additional questions about:")
                 print("  • Model performance comparisons and rankings")
                 print("  • Parameter optimization insights across model types")
@@ -223,6 +244,16 @@ Then transfer_to_human for more questions about the enhanced multi-model ML capa
             print(f"\n❌ An error occurred: {str(e)}")
             print("You can try asking another question or type 'exit' to quit.")
             log_error(f"Error in main workflow: {str(e)}", exc_info=True)
+            
+            # Publish supervisor failure event
+            if _events_available:
+                event_stream.publish(Event(
+                    type=EventType.AGENT_FAILED,
+                    agent_id='supervisor',
+                    session_id=session_id_str,
+                    error=str(e),
+                    data={'status': 'workflow_failed'}
+                ))
             
             # Show diagnostic information if available
             if _events_available:

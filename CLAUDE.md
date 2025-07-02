@@ -78,7 +78,7 @@ User Query → Supervisor → Stock Data Agent → Enhanced CSV with indicators
 
 ### Important Notes
 
-1. **Missing Module**: The `langgraph_supervisor` module is imported but not included. This needs to be available for the system to work.
+1. **Missing Module**: 
 
 2. **Hardcoded Query**: The main.py contains a hardcoded query for Apple stock. Modify line 40 in main.py to analyze different stocks or strategies.
 

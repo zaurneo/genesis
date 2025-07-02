@@ -7,7 +7,6 @@ langchain_core
 langchain_openai
 matplotlib
 langgraph
-langgraph_supervisor
 
 # Additional required dependencies
 tavily-python

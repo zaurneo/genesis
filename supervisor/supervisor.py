@@ -51,8 +51,8 @@ from langgraph.pregel.remote import RemoteGraph
 from langgraph.utils.config import patch_configurable
 from langgraph.utils.runnable import RunnableCallable, RunnableLike
 
-from langgraph_supervisor.agent_name import AgentNameMode, with_agent_name
-from langgraph_supervisor.handoff import (
+from supervisor.agent_name import AgentNameMode, with_agent_name
+from supervisor.handoff import (
     METADATA_KEY_HANDOFF_DESTINATION,
     _normalize_agent_name,
     create_handoff_back_messages,

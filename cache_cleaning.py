@@ -15,4 +15,4 @@ def delete_pycache_folders(root_folder):
     print(f"\nTotal __pycache__ folders deleted: {deleted}")
 
 # Replace 'genesis' with the full or relative path to your folder
-delete_pycache_folders("C:\Users\Zaur\OneDrive\Development\Genesis\genesis")
+delete_pycache_folders(r"C:\Users\Zaur\OneDrive\Development\Genesis\genesis")
