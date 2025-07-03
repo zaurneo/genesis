@@ -230,7 +230,7 @@ def create_parameter_sensitivity_chart(comparison_df: pd.DataFrame, symbol: str)
         y=comparison_df['total_return'],
         mode='markers',
         marker=dict(
-            size=comparison_df['sharpe_ratio'] * 10 + 10,  # Scale for visibility
+            size=np.clip(comparison_df['sharpe_ratio'] * 10 + 15, 8, 30),  # Scale for visibility, clipped to valid range
             color=comparison_df['max_drawdown'],
             colorscale='RdYlGn_r',  # Red for high drawdown, green for low
             showscale=True,

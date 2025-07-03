@@ -274,7 +274,7 @@ def enhance_with_model_metadata(backtest_result: str, metadata: Dict[str, Any]) 
     """
     try:
         # Parse key metrics from backtest result string
-        lines = backtest_result.split('\\n')
+        lines = backtest_result.split('\n')
         
         enhanced = {
             'model_type': metadata.get('model_type', 'unknown'),
