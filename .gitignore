@@ -3,3 +3,5 @@
 .claude
 output
 __pycache__/
+ignore.md
+node_modules

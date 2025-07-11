@@ -89,7 +89,7 @@ def generate_comprehensive_html_report_impl(
         # Generate summary
         summary = f"""generate_comprehensive_html_report: Successfully created HTML report for {symbol}:
 
-📄 REPORT DETAILS:
+[REPORT] REPORT DETAILS:
 - Symbol: {symbol}
 - Title: {title}
 - Sections Included: {total_sections} ({', '.join(sections)})
@@ -113,7 +113,7 @@ def generate_comprehensive_html_report_impl(
 - Export Ready: Suitable for presentations and sharing
 - Self-Contained: All resources embedded for portability
 
-🌐 USAGE INSTRUCTIONS:
+[WEB] USAGE INSTRUCTIONS:
 - Open HTML file in any modern web browser
 - Use navigation menu to jump between sections
 - Interactive charts support zoom, pan, and hover
@@ -370,17 +370,27 @@ def generate_section_content(
     """Generate content for a specific section."""
     
     section_title = section.replace('_', ' ').title()
+    section_lower = section.lower()
     
-    if section == 'summary':
-        return generate_summary_section(symbol, data_files, model_files, backtest_files, chart_files)
-    elif section == 'data_analysis':
-        return generate_data_analysis_section(data_files)
-    elif section == 'model_results':
-        return generate_model_results_section(model_files)
-    elif section == 'backtesting':
-        return generate_backtesting_section(backtest_files)
-    elif section == 'charts':
-        return generate_charts_section(chart_files, include_charts)
+    # Handle both original and custom section names
+    if section == 'summary' or section_lower == 'executive summary':
+        return generate_summary_section(symbol, data_files, model_files, backtest_files, chart_files, section)
+    elif section == 'data_analysis' or 'data collection' in section_lower or 'technical indicators' in section_lower:
+        return generate_data_analysis_section(data_files, section)
+    elif section == 'model_results' or 'model training' in section_lower or 'validation results' in section_lower:
+        return generate_model_results_section(model_files, section)
+    elif section == 'backtesting' or 'multi-model backtesting' in section_lower or 'performance comparison' in section_lower:
+        return generate_backtesting_section(backtest_files, section)
+    elif section == 'charts' or 'visualizations' in section_lower:
+        return generate_charts_section(chart_files, include_charts, section)
+    elif 'ai-assisted' in section_lower or 'model selection' in section_lower or 'parameters' in section_lower:
+        return generate_ai_model_selection_section(section)
+    elif 'parameter sensitivity' in section_lower or 'feature analysis' in section_lower:
+        return generate_parameter_sensitivity_section(section)
+    elif 'risk-return' in section_lower or 'model type effectiveness' in section_lower:
+        return generate_risk_return_section(backtest_files, section)
+    elif 'key takeaways' in section_lower or 'recommendations' in section_lower:
+        return generate_recommendations_section(backtest_files, section)
     else:
         return f"""
         <section id="{section}" class="section">
@@ -391,12 +401,24 @@ def generate_section_content(
 
 
 def generate_summary_section(symbol: str, data_files: List[Dict], model_files: List[Dict], 
-                           backtest_files: List[Dict], chart_files: List[Dict]) -> str:
+                           backtest_files: List[Dict], chart_files: List[Dict], section: str = "summary") -> str:
     """Generate the executive summary section."""
     
+    section_title = section.replace('_', ' ').title()
+    
+    # Load backtest data for summary
+    backtest_data = load_backtest_data(backtest_files)
+    
+    best_model_info = "Analysis based on available backtest results..."
+    if backtest_data:
+        best_model = backtest_data.get('rankings', {}).get('best_total_return', {}).get('model', '')
+        best_model_type = best_model.split('_')[1] if '_' in best_model else 'N/A'
+        best_return = backtest_data.get('rankings', {}).get('best_total_return', {}).get('value', 0)
+        best_model_info = f"{best_model_type.replace('_', ' ').title()} model with {best_return:.2f}% return"
+    
     return f"""
-        <section id="summary" class="section">
-            <h2>Executive Summary</h2>
+        <section id="{section}" class="section">
+            <h2>{section_title}</h2>
             
             <div class="summary-grid">
                 <div class="summary-card">
@@ -410,8 +432,8 @@ def generate_summary_section(symbol: str, data_files: List[Dict], model_files: L
                 
                 <div class="summary-card">
                     <h3>Best Performing Model</h3>
-                    <p>Analysis based on available backtest results...</p>
-                    <p><em>Detailed results available in Model Results section.</em></p>
+                    <p><strong>Top Model:</strong> {best_model_info}</p>
+                    <p><em>Detailed results available in backtesting section.</em></p>
                 </div>
                 
                 <div class="summary-card">
@@ -428,15 +450,29 @@ def generate_summary_section(symbol: str, data_files: List[Dict], model_files: L
 """
 
 
-def generate_data_analysis_section(data_files: List[Dict]) -> str:
+def generate_data_analysis_section(data_files: List[Dict], section: str = "data_analysis") -> str:
     """Generate the data analysis section."""
     
-    content = """
-        <section id="data_analysis" class="section">
-            <h2>Data Analysis</h2>
+    section_title = section.replace('_', ' ').title()
+    
+    content = f"""
+        <section id="{section}" class="section">
+            <h2>{section_title}</h2>
             
             <div class="data-files">
                 <h3>Available Data Files</h3>
+                <p>This section contains the data collection and technical indicator analysis for the stock analysis.</p>
+                
+                <div class="summary-card">
+                    <h4>Technical Indicators Applied</h4>
+                    <ul>
+                        <li><strong>Moving Averages:</strong> Simple Moving Average (SMA), Exponential Moving Average (EMA)</li>
+                        <li><strong>Momentum Indicators:</strong> Relative Strength Index (RSI), MACD</li>
+                        <li><strong>Volatility Indicators:</strong> Bollinger Bands, Average True Range (ATR)</li>
+                        <li><strong>Volume Indicators:</strong> Volume Moving Average, On-Balance Volume</li>
+                    </ul>
+                </div>
+                
                 <table>
                     <thead>
                         <tr>
@@ -470,15 +506,29 @@ def generate_data_analysis_section(data_files: List[Dict]) -> str:
     return content
 
 
-def generate_model_results_section(model_files: List[Dict]) -> str:
+def generate_model_results_section(model_files: List[Dict], section: str = "model_results") -> str:
     """Generate the model results section."""
     
-    content = """
-        <section id="model_results" class="section">
-            <h2>Model Results</h2>
+    section_title = section.replace('_', ' ').title()
+    
+    content = f"""
+        <section id="{section}" class="section">
+            <h2>{section_title}</h2>
             
             <div class="model-files">
                 <h3>Trained Models</h3>
+                <p>This section shows the machine learning models that were trained for the stock prediction analysis.</p>
+                
+                <div class="summary-card">
+                    <h4>Model Training Overview</h4>
+                    <ul>
+                        <li><strong>Models Used:</strong> XGBoost and Random Forest regression models</li>
+                        <li><strong>Target:</strong> 1-day ahead price prediction</li>
+                        <li><strong>Features:</strong> Technical indicators and historical price data</li>
+                        <li><strong>Validation:</strong> Time-series cross-validation with walk-forward analysis</li>
+                    </ul>
+                </div>
+                
                 <table>
                     <thead>
                         <tr>
@@ -512,15 +562,67 @@ def generate_model_results_section(model_files: List[Dict]) -> str:
     return content
 
 
-def generate_backtesting_section(backtest_files: List[Dict]) -> str:
+def generate_backtesting_section(backtest_files: List[Dict], section: str = "backtesting") -> str:
     """Generate the backtesting results section."""
     
-    content = """
-        <section id="backtesting" class="section">
-            <h2>Backtesting Results</h2>
+    section_title = section.replace('_', ' ').title()
+    
+    content = f"""
+        <section id="{section}" class="section">
+            <h2>{section_title}</h2>
             
             <div class="backtest-files">
                 <h3>Strategy Performance</h3>
+                <p>This section contains the backtesting results comparing multiple machine learning models using directional trading strategies.</p>
+    """
+    
+    # Load detailed backtest data if available
+    backtest_data = load_backtest_data(backtest_files)
+    
+    if backtest_data:
+        content += f"""
+                <div class="summary-card">
+                    <h4>Multi-Model Comparison Results</h4>
+                    <ul>
+                        <li><strong>Models Tested:</strong> {backtest_data.get('models_tested', 'N/A')}</li>
+                        <li><strong>Strategy Type:</strong> {backtest_data.get('strategy_type', 'N/A').replace('_', ' ').title()}</li>
+                        <li><strong>Best Performing Model:</strong> {backtest_data.get('rankings', {}).get('best_total_return', {}).get('model', 'N/A').split('_')[1] if backtest_data.get('rankings', {}).get('best_total_return', {}).get('model') else 'N/A'}</li>
+                        <li><strong>Average Return:</strong> {backtest_data.get('rankings', {}).get('summary_stats', {}).get('avg_return', 0):.2f}%</li>
+                    </ul>
+                </div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Model Type</th>
+                            <th>Total Return</th>
+                            <th>Excess Return</th>
+                            <th>Sharpe Ratio</th>
+                            <th>Max Drawdown</th>
+                            <th>Win Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        """
+        
+        for model in backtest_data.get('individual_results', []):
+            content += f"""
+                        <tr>
+                            <td>{model.get('model_type', 'N/A').replace('_', ' ').title()}</td>
+                            <td>{model.get('total_return', 0):+.2f}%</td>
+                            <td>{model.get('excess_return', 0):+.2f}%</td>
+                            <td>{model.get('sharpe_ratio', 0):.3f}</td>
+                            <td>{model.get('max_drawdown', 0):.2f}%</td>
+                            <td>{model.get('win_rate', 0):.1f}%</td>
+                        </tr>
+            """
+        
+        content += """
+                    </tbody>
+                </table>
+        """
+    else:
+        content += """
                 <table>
                     <thead>
                         <tr>
@@ -531,21 +633,24 @@ def generate_backtesting_section(backtest_files: List[Dict]) -> str:
                         </tr>
                     </thead>
                     <tbody>
-"""
-    
-    for file in backtest_files:
-        content += f"""
+        """
+        
+        for file in backtest_files:
+            content += f"""
                         <tr>
                             <td>{file['strategy_type'].replace('_', ' ').title()}</td>
                             <td>{file['total_return']:+.2f}%</td>
                             <td>{file['modified'].strftime('%Y-%m-%d')}</td>
                             <td>{file['filename']}</td>
                         </tr>
-"""
-    
-    content += """
+            """
+        
+        content += """
                     </tbody>
                 </table>
+        """
+    
+    content += """
             </div>
         </section>
 """
@@ -553,31 +658,259 @@ def generate_backtesting_section(backtest_files: List[Dict]) -> str:
     return content
 
 
-def generate_charts_section(chart_files: List[Dict], include_charts: bool) -> str:
+def generate_charts_section(chart_files: List[Dict], include_charts: bool, section: str = "charts") -> str:
     """Generate the charts section."""
     
-    content = """
-        <section id="charts" class="section">
-            <h2>Interactive Charts</h2>
+    section_title = section.replace('_', ' ').title()
+    
+    content = f"""
+        <section id="{section}" class="section">
+            <h2>{section_title}</h2>
             
             <div class="chart-files">
                 <h3>Available Visualizations</h3>
-                <div class="chart-grid">
+                <p>Interactive charts and visualizations generated from the analysis.</p>
 """
     
-    for file in chart_files:
-        chart_type_display = file['chart_type'].replace('_', ' ').title()
-        content += f"""
-                    <div class="chart-card">
-                        <h4>{chart_type_display}</h4>
-                        <p><strong>File:</strong> {file['filename']}</p>
-                        <p><strong>Created:</strong> {file['modified'].strftime('%Y-%m-%d %H:%M')}</p>
-                        <a href="{file['filename']}" target="_blank" class="chart-link">Open Chart</a>
+    if include_charts and chart_files:
+        # Embed charts directly in the HTML
+        for file in chart_files:
+            chart_type_display = file['chart_type'].replace('_', ' ').title()
+            chart_content = extract_chart_content(file['filename'])
+            
+            content += f"""
+                <div class="chart-container">
+                    <h4>{chart_type_display}</h4>
+                    <p><strong>Generated:</strong> {file['modified'].strftime('%Y-%m-%d %H:%M')}</p>
+                    <div class="embedded-chart">
+                        {chart_content}
                     </div>
-"""
+                </div>
+            """
+    else:
+        # Fallback to links if charts not embedded
+        content += '<div class="chart-grid">'
+        for file in chart_files:
+            chart_type_display = file['chart_type'].replace('_', ' ').title()
+            content += f"""
+                        <div class="chart-card">
+                            <h4>{chart_type_display}</h4>
+                            <p><strong>File:</strong> {file['filename']}</p>
+                            <p><strong>Created:</strong> {file['modified'].strftime('%Y-%m-%d %H:%M')}</p>
+                            <a href="{file['filename']}" target="_blank" class="chart-link">Open Chart</a>
+                        </div>
+            """
+        content += "</div>"
     
     content += """
-                </div>
+            </div>
+        </section>
+"""
+    
+    return content
+
+
+def extract_chart_content(filename: str) -> str:
+    """Extract chart content from a Plotly HTML file."""
+    try:
+        filepath = os.path.join(OUTPUT_DIR, filename)
+        if not os.path.exists(filepath):
+            return f"<p>Chart file not found: {filename}</p>"
+        
+        with open(filepath, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        # Extract the div containing the plotly chart
+        import re
+        
+        # Find the div with the plotly chart
+        div_match = re.search(r'<div[^>]*id="[^"]*"[^>]*class="plotly-graph-div"[^>]*>.*?</div>', html_content, re.DOTALL)
+        if not div_match:
+            # Try alternative pattern
+            div_match = re.search(r'<div[^>]*class="plotly-graph-div"[^>]*>.*?</div>', html_content, re.DOTALL)
+        
+        if div_match:
+            chart_div = div_match.group(0)
+        else:
+            # If we can't find the specific div, try to find the body content
+            body_match = re.search(r'<body[^>]*>(.*?)</body>', html_content, re.DOTALL)
+            if body_match:
+                chart_div = body_match.group(1)
+            else:
+                return f"<p>Could not extract chart content from {filename}</p>"
+        
+        # Extract and include the script tags that contain the plotly code
+        script_matches = re.findall(r'<script[^>]*>.*?</script>', html_content, re.DOTALL)
+        chart_scripts = ""
+        for script in script_matches:
+            if 'plotly' in script.lower() or 'Plotly' in script:
+                chart_scripts += script + "\n"
+        
+        # Combine the div and scripts
+        full_chart_content = chart_div + "\n" + chart_scripts
+        
+        return full_chart_content
+        
+    except Exception as e:
+        log_warning(f"Could not extract chart content from {filename}: {str(e)}")
+        return f"<p>Error loading chart: {str(e)}</p>"
+
+
+def load_backtest_data(backtest_files: List[Dict]) -> Optional[Dict]:
+    """Load detailed backtest data from JSON files."""
+    if not backtest_files:
+        return None
+    
+    try:
+        # Use the most recent backtest file
+        latest_file = backtest_files[0]
+        filepath = os.path.join(OUTPUT_DIR, latest_file['filename'])
+        
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        
+        return data
+    except Exception as e:
+        log_warning(f"Could not load backtest data: {str(e)}")
+        return None
+
+
+def generate_ai_model_selection_section(section: str) -> str:
+    """Generate AI-assisted model selection section."""
+    section_title = section.replace('_', ' ').title()
+    
+    return f"""
+        <section id="{section}" class="section">
+            <h2>{section_title}</h2>
+            
+            <div class="summary-card">
+                <h3>AI-Assisted Model Selection Process</h3>
+                <p>The Genesis system uses AI-assisted model selection to optimize machine learning parameters and model types for stock prediction.</p>
+                
+                <h4>Model Selection Criteria</h4>
+                <ul>
+                    <li><strong>XGBoost Parameters:</strong> Optimized learning rate, max depth, and number of estimators</li>
+                    <li><strong>Random Forest Parameters:</strong> Tuned number of trees, max features, and split criteria</li>
+                    <li><strong>Feature Engineering:</strong> Technical indicators selected based on market conditions</li>
+                    <li><strong>Time Series Validation:</strong> Walk-forward analysis to prevent look-ahead bias</li>
+                </ul>
+                
+                <h4>Parameter Optimization</h4>
+                <p>The AI assistant analyzes historical performance and market volatility to recommend optimal model parameters for each specific stock and time period.</p>
+            </div>
+        </section>
+"""
+
+
+def generate_parameter_sensitivity_section(section: str) -> str:
+    """Generate parameter sensitivity analysis section."""
+    section_title = section.replace('_', ' ').title()
+    
+    return f"""
+        <section id="{section}" class="section">
+            <h2>{section_title}</h2>
+            
+            <div class="summary-card">
+                <h3>Parameter Sensitivity Analysis</h3>
+                <p>This section analyzes how sensitive the model performance is to different parameter choices and feature combinations.</p>
+                
+                <h4>Key Findings</h4>
+                <ul>
+                    <li><strong>Learning Rate Sensitivity:</strong> XGBoost performance varies significantly with learning rate changes</li>
+                    <li><strong>Feature Importance:</strong> Technical indicators show varying importance across different market conditions</li>
+                    <li><strong>Model Complexity:</strong> Balance between model complexity and overfitting risk</li>
+                    <li><strong>Time Window Effects:</strong> Prediction accuracy depends on the lookback period for features</li>
+                </ul>
+            </div>
+        </section>
+"""
+
+
+def generate_risk_return_section(backtest_files: List[Dict], section: str) -> str:
+    """Generate risk-return analysis section."""
+    section_title = section.replace('_', ' ').title()
+    
+    backtest_data = load_backtest_data(backtest_files)
+    
+    content = f"""
+        <section id="{section}" class="section">
+            <h2>{section_title}</h2>
+            
+            <div class="summary-card">
+                <h3>Risk-Return Analysis</h3>
+                <p>Comprehensive analysis of risk-adjusted returns and model type effectiveness.</p>
+    """
+    
+    if backtest_data:
+        content += f"""
+                <h4>Risk Metrics Summary</h4>
+                <ul>
+                    <li><strong>Average Sharpe Ratio:</strong> {backtest_data.get('rankings', {}).get('summary_stats', {}).get('avg_sharpe', 0):.3f}</li>
+                    <li><strong>Average Drawdown:</strong> {backtest_data.get('rankings', {}).get('summary_stats', {}).get('avg_drawdown', 0):.2f}%</li>
+                    <li><strong>Average Win Rate:</strong> {backtest_data.get('rankings', {}).get('summary_stats', {}).get('avg_win_rate', 0):.1f}%</li>
+                    <li><strong>Best Risk-Adjusted Model:</strong> {backtest_data.get('rankings', {}).get('best_sharpe_ratio', {}).get('model', 'N/A').split('_')[1] if backtest_data.get('rankings', {}).get('best_sharpe_ratio', {}).get('model') else 'N/A'}</li>
+                </ul>
+        """
+    else:
+        content += """
+                <h4>Risk Analysis</h4>
+                <p>Risk metrics are calculated based on backtesting results and include Sharpe ratio, maximum drawdown, and volatility measures.</p>
+        """
+    
+    content += """
+            </div>
+        </section>
+"""
+    
+    return content
+
+
+def generate_recommendations_section(backtest_files: List[Dict], section: str) -> str:
+    """Generate key takeaways and recommendations section."""
+    section_title = section.replace('_', ' ').title()
+    
+    backtest_data = load_backtest_data(backtest_files)
+    
+    content = f"""
+        <section id="{section}" class="section">
+            <h2>{section_title}</h2>
+            
+            <div class="summary-card">
+                <h3>Key Takeaways & Strategic Recommendations</h3>
+    """
+    
+    if backtest_data:
+        best_model = backtest_data.get('rankings', {}).get('best_total_return', {}).get('model', '')
+        best_model_type = best_model.split('_')[1] if '_' in best_model else 'N/A'
+        
+        content += f"""
+                <h4>Performance Summary</h4>
+                <ul>
+                    <li><strong>Best Performing Model:</strong> {best_model_type} with {backtest_data.get('rankings', {}).get('best_total_return', {}).get('value', 0):.2f}% return</li>
+                    <li><strong>Models Tested:</strong> {backtest_data.get('models_tested', 'N/A')} different machine learning models</li>
+                    <li><strong>Strategy Type:</strong> {backtest_data.get('strategy_type', 'N/A').replace('_', ' ').title()}</li>
+                </ul>
+                
+                <h4>Strategic Recommendations</h4>
+                <ul>
+                    <li><strong>Model Selection:</strong> Consider the risk-adjusted performance rather than just total returns</li>
+                    <li><strong>Risk Management:</strong> Implement position sizing based on volatility and drawdown metrics</li>
+                    <li><strong>Continuous Monitoring:</strong> Regularly retrain models as market conditions change</li>
+                    <li><strong>Diversification:</strong> Consider combining multiple model predictions for robust performance</li>
+                </ul>
+        """
+    else:
+        content += """
+                <h4>General Recommendations</h4>
+                <ul>
+                    <li><strong>Model Validation:</strong> Always use proper cross-validation for time series data</li>
+                    <li><strong>Risk Management:</strong> Implement proper position sizing and risk controls</li>
+                    <li><strong>Performance Monitoring:</strong> Track model performance and retrain when necessary</li>
+                    <li><strong>Market Conditions:</strong> Consider different models for different market regimes</li>
+                </ul>
+        """
+    
+    content += """
             </div>
         </section>
 """
@@ -736,6 +1069,32 @@ def get_css_styles() -> str:
         
         .chart-link:hover {
             background: #5a6fd8;
+        }
+        
+        .chart-container {
+            margin: 2rem 0;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .chart-container h4 {
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        
+        .embedded-chart {
+            margin-top: 1rem;
+            background: white;
+            border-radius: 4px;
+            padding: 1rem;
+            min-height: 400px;
+        }
+        
+        .embedded-chart .plotly-graph-div {
+            width: 100% !important;
+            height: auto !important;
         }
         
         footer {

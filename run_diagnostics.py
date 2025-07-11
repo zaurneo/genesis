@@ -25,7 +25,7 @@ def main():
     
     if args.live:
         # Live monitoring mode
-        print("🔄 LIVE MONITORING MODE (Press Ctrl+C to exit)")
+        print("[REFRESH] LIVE MONITORING MODE (Press Ctrl+C to exit)")
         print("="*60)
         
         # Enable verbose event tracking
@@ -45,13 +45,13 @@ def main():
         all_events = event_stream.get_events()
         
         if not all_events:
-            print("❌ No events found")
+            print("[ERROR] No events found")
             return
         
         # Get unique sessions
         sessions = list(set(e.session_id for e in all_events if e.session_id))
         if not sessions:
-            print("❌ No sessions found")
+            print("[ERROR] No sessions found")
             return
         
         # Get last session (most recent event)
@@ -78,7 +78,7 @@ def main():
     
     else:
         # Interactive mode
-        print("🔍 GENESIS DIAGNOSTIC TOOL")
+        print("[SEARCH] GENESIS DIAGNOSTIC TOOL")
         print("="*40)
         print("1. Analyze specific session")
         print("2. Analyze last session")
