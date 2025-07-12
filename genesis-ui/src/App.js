@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Brain, Send, Bot, User, TrendingUp, BarChart3, FileText, Loader2, ChevronRight, Activity, Sparkles, Database, Play, X, Maximize2, Minimize2, AlertCircle } from 'lucide-react';
 import * as Plotly from 'plotly.js-dist';
+import './App.css';
+
 
 // Configuration
 const API_CONFIG = {
