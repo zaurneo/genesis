@@ -77,20 +77,22 @@ def main():
     log_info("UI initialized and ready for user interaction")
     
     # ENHANCED initial query showcasing new multi-model backtesting capabilities
-    initial_query = """Get Apple stock data, apply technical indicators, then use the enhanced scalable ML system with multi-model capabilities to:
+    # Modify the initial_query in main.py to include:
+    initial_query = """Get Apple stock data, apply technical indicators, train models, perform backtesting, and then GENERATE A COMPREHENSIVE FINAL REPORT with all visualizations and analysis summary."""
+#     initial_query = """Get Apple stock data, apply technical indicators, then use the enhanced scalable ML system with multi-model capabilities to:
 
-1. Get AI-assisted model parameter recommendations using get_model_selection_guide for short-term trading
-2. Train multiple models using different algorithms (XGBoost, Random Forest) with various parameter configurations
-3. Use the new backtest_multiple_models tool to compare all models simultaneously
-4. Identify best performers across different criteria (return, Sharpe ratio, drawdown)
-5. Create comprehensive multi-model comparison visualizations showing:
-   - Performance rankings across all models
-   - Parameter sensitivity analysis
-   - Risk-return scatter plots
-   - Model type effectiveness comparison
-6. Generate a comprehensive HTML report with all findings and model comparison insights
+# 1. Get AI-assisted model parameter recommendations using get_model_selection_guide for short-term trading
+# 2. Train multiple models using different algorithms (XGBoost, Random Forest) with various parameter configurations
+# 3. Use the new backtest_multiple_models tool to compare all models simultaneously
+# 4. Identify best performers across different criteria (return, Sharpe ratio, drawdown)
+# 5. Create comprehensive multi-model comparison visualizations showing:
+#    - Performance rankings across all models
+#    - Parameter sensitivity analysis
+#    - Risk-return scatter plots
+#    - Model type effectiveness comparison
+# 6. Generate a comprehensive HTML report with all findings and model comparison insights
 
-Then transfer_to_human for more questions about the enhanced multi-model ML capabilities."""
+# Then transfer_to_human for more questions about the enhanced multi-model ML capabilities."""
     
     print(f"\n🚀 Starting with enhanced multi-model ML showcase: '{initial_query}'")
     log_info(f"Processing initial query: {initial_query[:100]}...")

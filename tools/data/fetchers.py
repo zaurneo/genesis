@@ -5,6 +5,7 @@ import sys
 import pandas as pd
 from datetime import datetime
 from typing import Optional
+import yfinance as yf
 
 # Import logging helpers
 import importlib

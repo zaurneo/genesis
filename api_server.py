@@ -132,6 +132,7 @@ class GenesisSession:
             }
             
             # Process through the workflow
+# Process through the workflow
             async for chunk in self.graph.astream(inputs, config=self.config, stream_mode="updates"):
                 for node_name, messages in chunk.items():
                     agent_name = self._get_friendly_agent_name(node_name)
@@ -143,6 +144,44 @@ class GenesisSession:
                             # Check for visualization data in the message
                             viz_data = None
                             plotly_data = None
+                            
+                            # Extract any Plotly data from the message
+                            if hasattr(msg, 'additional_kwargs'):
+                                viz_data = msg.additional_kwargs.get('visualization_data')
+                                plotly_data = msg.additional_kwargs.get('plotly_data')
+                            
+                            # Special handling for Reporter Agent final outputs
+                            if agent_name == "Reporter Agent" and any(keyword in content.lower() for keyword in ['final report', 'executive summary', 'key findings', 'recommendations']):
+                                # This is likely a final report
+                                await self.send_update(
+                                    agent_name,
+                                    content,
+                                    "complete",
+                                    viz_data,
+                                    plotly_data
+                                )
+                                
+                                # Also check for any saved charts mentioned in the report
+                                if "chart saved:" in content.lower() or "visualization saved:" in content.lower():
+                                    # Extract chart data if available
+                                    chart_data = await self._extract_chart_data(content)
+                                    if chart_data:
+                                        await self.send_update(
+                                            agent_name,
+                                            "Chart visualization ready",
+                                            "complete",
+                                            None,
+                                            chart_data
+                                        )
+                            else:
+                                # Regular update for other agents or non-final content
+                                await self.send_update(
+                                    agent_name,
+                                    content,
+                                    "processing",
+                                    viz_data,
+                                    plotly_data
+                                )
                             
                             # Extract any Plotly data from the message
                             if hasattr(msg, 'additional_kwargs'):
@@ -192,7 +231,7 @@ class GenesisSession:
             "supervisor": "Supervisor",
             "stock_data_agent": "Data Agent",
             "stock_analyzer_agent": "Analyzer Agent",
-            "stock_reporter_agent": "Reporter Agent"
+            "stock_reporter_agent": "Reporter Agent"  # Make sure this matches exactly
         }
         return mapping.get(node_name, node_name.replace('_', ' ').title())
     
@@ -200,11 +239,23 @@ class GenesisSession:
         """Extract Plotly chart data from saved files or content."""
         try:
             # Look for saved chart files in the content
-            if "Location:" in content:
+            if "Location:" in content or "CHART SAVED:" in content.upper():
                 lines = content.split('\n')
                 for line in lines:
-                    if "Location:" in line and ".html" in line:
-                        file_path = line.split("Location:")[1].strip()
+                    if ("Location:" in line or "saved:" in line.lower()) and ".html" in line:
+                        # Extract file path
+                        import re
+                        file_match = re.search(r'output/[\w\-_]+\.html', line)
+                        if file_match:
+                            file_path = file_match.group(0)
+                        else:
+                            # Try to find any .html file mentioned
+                            html_match = re.search(r'[\w\-_]+\.html', line)
+                            if html_match:
+                                file_path = os.path.join("output", html_match.group(0))
+                            else:
+                                continue
+                        
                         if os.path.exists(file_path):
                             # Read the HTML file and extract Plotly data
                             with open(file_path, 'r') as f:
