@@ -90,6 +90,12 @@ def visualize_backtesting_results_impl(
         with open(filepath, 'r') as f:
             results_data = json.load(f)
         
+        # Check if 'signals' key exists in results_data
+        if 'signals' not in results_data:
+            result = f"visualize_backtesting_results: No signals data found in results file"
+            log_error(f"visualize_backtesting_results: {result}")
+            return result
+        
         signals_df = pd.DataFrame(results_data['signals'])
         signals_df['date'] = pd.to_datetime(signals_df['date'])
         signals_df.set_index('date', inplace=True)
@@ -120,8 +126,7 @@ def visualize_backtesting_results_impl(
             chart_file = f"backtesting_{symbol}_{chart_type}_{timestamp}.html"
             chart_filepath = os.path.join(OUTPUT_DIR, chart_file)
             
-            # Ensure Plotly is properly initialized for offline plotting
-            pyo.init_notebook_mode(connected=False)
+            # Save plot without notebook initialization (we're not in a notebook)
             plot(fig, filename=chart_filepath, auto_open=False, include_plotlyjs='cdn', config={'displayModeBar': True})
         
         # Generate summary

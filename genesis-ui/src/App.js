@@ -139,6 +139,26 @@ const GenesisReportViewer = () => {
             content: agentUpdate.content
           };
           setVisualizations(prev => [...prev, newViz]);
+        } else if (agentUpdate.visualization_data && agentUpdate.visualization_data.chart_available) {
+          // Handle chart reference (when we can't extract the full plotly data)
+          const newViz = {
+            id: Date.now(),
+            title: extractChartTitle(agentUpdate.content),
+            plotlyData: null,
+            content: agentUpdate.content,
+            chartInfo: agentUpdate.visualization_data.chart_info
+          };
+          setVisualizations(prev => [...prev, newViz]);
+        } else if (content.includes('chart') && content.includes('created')) {
+          // Also check content for chart creation messages
+          const newViz = {
+            id: Date.now(),
+            title: extractChartTitle(agentUpdate.content),
+            plotlyData: null,
+            content: agentUpdate.content,
+            chartInfo: { message: 'Chart created' }
+          };
+          setVisualizations(prev => [...prev, newViz]);
         }
       }
     }
@@ -384,10 +404,21 @@ Based on the multi-agent analysis, the stock shows positive momentum with strong
                 {visualizations.map((viz, index) => (
                   <div key={viz.id} className="bg-gray-900 rounded-lg p-4 border border-gray-800">
                     <h3 className="text-md font-medium mb-3 text-gray-200">{viz.title}</h3>
-                    <div 
-                      ref={el => plotlyRefs.current[`viz-${index}`] = el}
-                      className="w-full h-96 bg-gray-950 rounded"
-                    />
+                    {viz.plotlyData ? (
+                      <div 
+                        ref={el => plotlyRefs.current[`viz-${index}`] = el}
+                        className="w-full h-96 bg-gray-950 rounded"
+                      />
+                    ) : (
+                      <div className="w-full h-96 bg-gray-950 rounded flex items-center justify-center">
+                        <div className="text-center text-gray-400">
+                          <BarChart3 className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                          <p className="text-sm">Chart saved to file:</p>
+                          <p className="text-xs mt-1 text-gray-500">{viz.chartInfo?.file || 'visualization.html'}</p>
+                          <p className="text-xs mt-2 text-gray-600">Open the HTML file directly to view the interactive chart</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

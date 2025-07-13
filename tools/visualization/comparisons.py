@@ -117,8 +117,7 @@ def visualize_model_comparison_backtesting_impl(
             chart_file = f"model_comparison_{symbol}_{chart_type}_{timestamp}.html"
             chart_filepath = os.path.join(OUTPUT_DIR, chart_file)
             
-            # Ensure Plotly is properly initialized for offline plotting
-            pyo.init_notebook_mode(connected=False)
+            # Save plot without notebook initialization (we're not in a notebook)
             plot(fig, filename=chart_filepath, auto_open=False, include_plotlyjs='cdn', config={'displayModeBar': True})
         
         # Generate summary

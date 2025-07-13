@@ -133,8 +133,7 @@ def visualize_stock_data_impl(
             chart_file = f"visualize_stock_data_{symbol}_{chart_type}_{timestamp}.html"
             chart_filepath = os.path.join(OUTPUT_DIR, chart_file)
             
-            # Ensure Plotly is properly initialized for offline plotting
-            pyo.init_notebook_mode(connected=False)
+            # Save plot without notebook initialization (we're not in a notebook)
             plot(fig, filename=chart_filepath, auto_open=False, include_plotlyjs='cdn', config={'displayModeBar': True})
         
         # Count indicators if shown
@@ -279,7 +278,7 @@ def create_combined_chart(data: pd.DataFrame, symbol: str, show_indicators: bool
         shared_xaxes=True,
         vertical_spacing=0.1,
         subplot_titles=(f'{symbol} Price', 'Volume'),
-        row_weights=[0.7, 0.3]
+        row_heights=[0.7, 0.3]
     )
     
     # Add candlestick to first subplot

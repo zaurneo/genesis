@@ -170,17 +170,28 @@ class GenesisSession:
                                     )
                                     
                                     # Check for any saved charts mentioned in the report
-                                    if "chart saved:" in content.lower() or "visualization saved:" in content.lower():
-                                        # Extract chart data if available
-                                        chart_data = await self._extract_chart_data(content)
-                                        if chart_data:
-                                            await self.send_update(
-                                                agent_name,
-                                                "Chart visualization ready",
-                                                "complete",
-                                                None,
-                                                chart_data
-                                            )
+                                    if "CHART SAVED:" in content or "visualize_" in content:
+                                        # Extract chart info
+                                        chart_info = await self._extract_chart_data(content)
+                                        if chart_info:
+                                            # If we successfully extracted Plotly data, send it
+                                            if 'data' in chart_info and 'layout' in chart_info:
+                                                await self.send_update(
+                                                    agent_name,
+                                                    f"Chart visualization ready: {chart_info.get('file', 'chart.html')}",
+                                                    "complete",
+                                                    None,
+                                                    chart_info  # This contains data and layout
+                                                )
+                                            else:
+                                                # Otherwise send as visualization_data
+                                                await self.send_update(
+                                                    agent_name,
+                                                    f"Visualization created: {chart_info.get('file', 'chart.html')}",
+                                                    "complete",
+                                                    {"chart_available": True, "chart_info": chart_info},
+                                                    None
+                                                )
                                 # Skip intermediate Reporter Agent messages
                                 # Only send if it's a final output
                             elif agent_name != "Reporter Agent":
@@ -222,38 +233,142 @@ class GenesisSession:
         """Extract Plotly chart data from saved files or content."""
         try:
             # Look for saved chart files in the content
-            if "Location:" in content or "CHART SAVED:" in content.upper():
+            if "CHART SAVED:" in content.upper() or "Location:" in content:
                 lines = content.split('\n')
                 for line in lines:
-                    if ("Location:" in line or "saved:" in line.lower()) and ".html" in line:
+                    if ".html" in line:
                         # Extract file path
                         import re
-                        file_match = re.search(r'output/[\w\-_]+\.html', line)
-                        if file_match:
-                            file_path = file_match.group(0)
-                        else:
-                            # Try to find any .html file mentioned
-                            html_match = re.search(r'[\w\-_]+\.html', line)
-                            if html_match:
-                                file_path = os.path.join("output", html_match.group(0))
-                            else:
-                                continue
+                        # Look for various patterns of file paths
+                        patterns = [
+                            r'output/[\w\-_]+\.html',
+                            r'Location:\s*(.+\.html)',
+                            r'saved:\s*(.+\.html)',
+                            r'(visualize_[\w\-_]+\.html)'
+                        ]
                         
-                        if os.path.exists(file_path):
-                            # Read the HTML file and extract Plotly data
-                            with open(file_path, 'r') as f:
-                                html_content = f.read()
+                        file_path = None
+                        for pattern in patterns:
+                            match = re.search(pattern, line, re.IGNORECASE)
+                            if match:
+                                if match.group(0).startswith('output/'):
+                                    file_path = match.group(0)
+                                else:
+                                    file_path = os.path.join("output", match.group(1) if len(match.groups()) > 0 else match.group(0))
+                                break
+                        
+                        if file_path and os.path.exists(file_path):
+                            # Try to extract Plotly data from the HTML file
+                            try:
+                                with open(file_path, 'r') as f:
+                                    html_content = f.read()
+                                
+                                # Extract Plotly data more robustly
+                                # Find the Plotly.newPlot call
+                                if 'Plotly.newPlot(' in html_content:
+                                    try:
+                                        # Find the start of the Plotly.newPlot call
+                                        start_idx = html_content.find('Plotly.newPlot(')
+                                        if start_idx == -1:
+                                            raise ValueError("Could not find Plotly.newPlot")
+                                        
+                                        # Move past 'Plotly.newPlot('
+                                        content_start = start_idx + len('Plotly.newPlot(')
+                                        
+                                        # Extract the entire call by counting parentheses
+                                        paren_count = 1
+                                        idx = content_start
+                                        while paren_count > 0 and idx < len(html_content):
+                                            if html_content[idx] == '(':
+                                                paren_count += 1
+                                            elif html_content[idx] == ')':
+                                                paren_count -= 1
+                                            idx += 1
+                                        
+                                        # Extract the parameters
+                                        params_str = html_content[content_start:idx-1]
+                                        
+                                        # Split by the first comma after the div ID
+                                        # Find the div ID end
+                                        div_end = params_str.find('",') + 1
+                                        if div_end == 0:
+                                            div_end = params_str.find("',") + 1
+                                        
+                                        # Extract data and layout parts
+                                        remaining = params_str[div_end:].strip()
+                                        if remaining.startswith(','):
+                                            remaining = remaining[1:].strip()
+                                        
+                                        # Find the end of the data array
+                                        bracket_count = 0
+                                        data_end = 0
+                                        for i, char in enumerate(remaining):
+                                            if char == '[':
+                                                bracket_count += 1
+                                            elif char == ']':
+                                                bracket_count -= 1
+                                                if bracket_count == 0:
+                                                    data_end = i + 1
+                                                    break
+                                        
+                                        data_str = remaining[:data_end]
+                                        
+                                        # Find layout - it's after the data array and a comma
+                                        layout_start = data_end
+                                        while layout_start < len(remaining) and remaining[layout_start] in ' ,':
+                                            layout_start += 1
+                                        
+                                        # Find the end of the layout object
+                                        brace_count = 0
+                                        layout_end = layout_start
+                                        for i in range(layout_start, len(remaining)):
+                                            if remaining[i] == '{':
+                                                brace_count += 1
+                                            elif remaining[i] == '}':
+                                                brace_count -= 1
+                                                if brace_count == 0:
+                                                    layout_end = i + 1
+                                                    break
+                                        
+                                        layout_str = remaining[layout_start:layout_end]
+                                        
+                                        # Parse the JSON
+                                        chart_data = json.loads(data_str)
+                                        chart_layout = json.loads(layout_str)
+                                        
+                                        return {
+                                            "data": chart_data,
+                                            "layout": chart_layout,
+                                            "file": os.path.basename(file_path)
+                                        }
+                                    except Exception as e:
+                                        log_error(f"Error extracting Plotly data: {str(e)}")
+                                        # Try simpler regex as fallback
+                                        import re
+                                        plotly_match = re.search(
+                                            r'Plotly\.newPlot\([^,]+,\s*(\[[^\]]+\]),\s*(\{[^}]+\})',
+                                            html_content
+                                        )
+                                        if plotly_match:
+                                            try:
+                                                chart_data = json.loads(plotly_match.group(1))
+                                                chart_layout = json.loads(plotly_match.group(2))
+                                                return {
+                                                    "data": chart_data,
+                                                    "layout": chart_layout,
+                                                    "file": os.path.basename(file_path)
+                                                }
+                                            except:
+                                                pass
+                            except Exception as parse_error:
+                                log_error(f"Error parsing Plotly data from {file_path}: {str(parse_error)}")
                             
-                            # Simple extraction of Plotly data from HTML
-                            import re
-                            data_match = re.search(r'Plotly\.newPlot\([^,]+,\s*(\[.*?\])', html_content, re.DOTALL)
-                            layout_match = re.search(r'Plotly\.newPlot\([^,]+,\s*\[.*?\],\s*(\{.*?\})', html_content, re.DOTALL)
-                            
-                            if data_match and layout_match:
-                                return {
-                                    "data": json.loads(data_match.group(1)),
-                                    "layout": json.loads(layout_match.group(1))
-                                }
+                            # Fallback to just returning file reference
+                            return {
+                                "type": "chart_reference",
+                                "file": os.path.basename(file_path),
+                                "message": f"Chart saved: {os.path.basename(file_path)}"
+                            }
         except Exception as e:
             log_error(f"Error extracting chart data: {str(e)}")
         
@@ -333,18 +448,83 @@ async def get_chart_data(filename: str):
         with open(file_path, 'r') as f:
             html_content = f.read()
         
-        # Extract Plotly data
-        import re
-        data_match = re.search(r'Plotly\.newPlot\([^,]+,\s*(\[.*?\])', html_content, re.DOTALL)
-        layout_match = re.search(r'Plotly\.newPlot\([^,]+,\s*\[.*?\],\s*(\{.*?\})', html_content, re.DOTALL)
-        
-        if data_match and layout_match:
-            return {
-                "data": json.loads(data_match.group(1)),
-                "layout": json.loads(layout_match.group(1))
-            }
+        # Extract Plotly data using the same logic as _extract_chart_data
+        if 'Plotly.newPlot(' in html_content:
+            try:
+                # Find the start of the Plotly.newPlot call
+                start_idx = html_content.find('Plotly.newPlot(')
+                if start_idx == -1:
+                    raise ValueError("Could not find Plotly.newPlot")
+                
+                # Move past 'Plotly.newPlot('
+                content_start = start_idx + len('Plotly.newPlot(')
+                
+                # Extract the entire call by counting parentheses
+                paren_count = 1
+                idx = content_start
+                while paren_count > 0 and idx < len(html_content):
+                    if html_content[idx] == '(':
+                        paren_count += 1
+                    elif html_content[idx] == ')':
+                        paren_count -= 1
+                    idx += 1
+                
+                # Extract the parameters
+                params_str = html_content[content_start:idx-1]
+                
+                # Split by the first comma after the div ID
+                # Find the div ID end
+                div_end = params_str.find('",') + 1
+                if div_end == 0:
+                    div_end = params_str.find("',") + 1
+                
+                # Extract data and layout parts
+                remaining = params_str[div_end:].strip()
+                if remaining.startswith(','):
+                    remaining = remaining[1:].strip()
+                
+                # Find the end of the data array
+                bracket_count = 0
+                data_end = 0
+                for i, char in enumerate(remaining):
+                    if char == '[':
+                        bracket_count += 1
+                    elif char == ']':
+                        bracket_count -= 1
+                        if bracket_count == 0:
+                            data_end = i + 1
+                            break
+                
+                data_str = remaining[:data_end]
+                
+                # Find layout - it's after the data array and a comma
+                layout_start = data_end
+                while layout_start < len(remaining) and remaining[layout_start] in ' ,':
+                    layout_start += 1
+                
+                # Find the end of the layout object
+                brace_count = 0
+                layout_end = layout_start
+                for i in range(layout_start, len(remaining)):
+                    if remaining[i] == '{':
+                        brace_count += 1
+                    elif remaining[i] == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            layout_end = i + 1
+                            break
+                
+                layout_str = remaining[layout_start:layout_end]
+                
+                # Parse the JSON
+                return {
+                    "data": json.loads(data_str),
+                    "layout": json.loads(layout_str)
+                }
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Could not extract Plotly data: {str(e)}")
         else:
-            raise HTTPException(status_code=400, detail="Could not extract Plotly data")
+            raise HTTPException(status_code=400, detail="No Plotly.newPlot found in HTML")
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
