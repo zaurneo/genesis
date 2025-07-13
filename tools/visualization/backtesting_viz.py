@@ -27,6 +27,7 @@ try:
     import plotly.graph_objects as go
     import plotly.subplots as sp
     from plotly.offline import plot
+    import plotly.offline as pyo
     _plotly_available = True
 except ImportError:
     _plotly_available = False
@@ -119,7 +120,9 @@ def visualize_backtesting_results_impl(
             chart_file = f"backtesting_{symbol}_{chart_type}_{timestamp}.html"
             chart_filepath = os.path.join(OUTPUT_DIR, chart_file)
             
-            plot(fig, filename=chart_filepath, auto_open=False)
+            # Ensure Plotly is properly initialized for offline plotting
+            pyo.init_notebook_mode(connected=False)
+            plot(fig, filename=chart_filepath, auto_open=False, include_plotlyjs='cdn', config={'displayModeBar': True})
         
         # Generate summary
         summary = f"""visualize_backtesting_results: Successfully created {chart_type} chart for {symbol}:

@@ -6,3 +6,4 @@ __pycache__/
 ignore.md
 node_modules
 docs
+old_genesis

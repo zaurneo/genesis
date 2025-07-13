@@ -78,7 +78,7 @@ def main():
     
     # ENHANCED initial query showcasing new multi-model backtesting capabilities
     # Modify the initial_query in main.py to include:
-    initial_query = """Get Apple stock data, apply technical indicators, train models, perform backtesting, and then GENERATE A COMPREHENSIVE FINAL REPORT with all visualizations and analysis summary."""
+    initial_query = """Get Apple stock data, apply technical indicators, train models, perform backtesting, create all visualizations, and then GENERATE A COMPREHENSIVE FINAL REPORT with all visualizations and analysis summary. Make sure all charts are properly rendered with full JavaScript support."""
 #     initial_query = """Get Apple stock data, apply technical indicators, then use the enhanced scalable ML system with multi-model capabilities to:
 
 # 1. Get AI-assisted model parameter recommendations using get_model_selection_guide for short-term trading
@@ -112,21 +112,52 @@ def main():
             # Run the graph until interruption or completion
             print("\n" + "="*50)
             print(" Running enhanced multi-model agent workflow...")
+            print(" (Only showing important updates and final reports)")
             print("="*50)
             log_progress("Running agent workflow")
             
+            # Track which agents have been active
+            active_agents = set()
+            
             for chunk in graph.stream(inputs, config=config, stream_mode="updates"):
-                print(f"\n🤖 Agent Update:")
                 for node_name, messages in chunk.items():
-                    print(f"📍 Node: {node_name}")
                     log_info(f"Processing node: {node_name}")
+                    
+                    # Show progress indicator for new agents
+                    if node_name not in active_agents and node_name not in ['supervisor', 'human']:
+                        active_agents.add(node_name)
+                        print(f"\n⚙️  {node_name.replace('_', ' ').title()} is working...")
+                    
                     if isinstance(messages, dict) and "messages" in messages:
                         for msg in messages["messages"]:
-                            if hasattr(msg, 'pretty_print'):
-                                msg.pretty_print()
-                            else:
-                                print(f"  {msg}")
-                    print("-" * 30)
+                            # Only show meaningful updates, not tool outputs
+                            if hasattr(msg, 'content') and hasattr(msg, 'type'):
+                                # Check if this is a meaningful agent message (not a tool call)
+                                if msg.type == 'ai' and not hasattr(msg, 'tool_calls'):
+                                    # Only show if it contains a final report or important status
+                                    content_lower = str(msg.content).lower()
+                                    if any(keyword in content_lower for keyword in [
+                                        'final report', 'comprehensive report', 'analysis complete',
+                                        'report generated', 'visualization created', 'summary',
+                                        'transferring to', 'handing off to', 'next agent'
+                                    ]):
+                                        print(f"\n🤖 {node_name.upper()} Update:")
+                                        print("-" * 50)
+                                        if hasattr(msg, 'pretty_print'):
+                                            msg.pretty_print()
+                                        else:
+                                            print(f"{msg.content}")
+                                        print("-" * 50)
+                                elif msg.type == 'human':
+                                    # Always show human messages
+                                    print(f"\n👤 User: {msg.content}")
+                            elif hasattr(msg, 'name') and msg.name == 'stock_reporter_agent':
+                                # Special handling for reporter agent final output
+                                if hasattr(msg, 'content') and 'COMPREHENSIVE STOCK ANALYSIS REPORT' in str(msg.content):
+                                    print(f"\n📊 FINAL REPORT FROM {node_name.upper()}:")
+                                    print("=" * 50)
+                                    print(msg.content)
+                                    print("=" * 50)
             
             # Check if we've reached an interruption point
             current_state = graph.get_state(config)
