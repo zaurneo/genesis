@@ -1,3 +1,6 @@
 .env
 .txt
 __pycache__/
+genesis-ui
+docs
+old_genesis

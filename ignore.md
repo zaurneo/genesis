@@ -1,0 +1,1 @@
+Genesis python environment activation: source genesis/bin/activate
