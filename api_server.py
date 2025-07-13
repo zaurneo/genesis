@@ -151,30 +151,40 @@ class GenesisSession:
                                 plotly_data = msg.additional_kwargs.get('plotly_data')
                             
                             # Special handling for Reporter Agent final outputs
-                            if agent_name == "Reporter Agent" and any(keyword in content.lower() for keyword in ['final report', 'executive summary', 'key findings', 'recommendations']):
-                                # This is likely a final report
-                                await self.send_update(
-                                    agent_name,
-                                    content,
-                                    "complete",
-                                    viz_data,
-                                    plotly_data
-                                )
+                            if agent_name == "Reporter Agent":
+                                # Check if this is a final report
+                                is_final_report = any(keyword in content.lower() for keyword in [
+                                    'final report', 'executive summary', 'key findings', 
+                                    'recommendations', 'conclusion', 'investment recommendation',
+                                    'analysis complete', 'report generated'
+                                ])
                                 
-                                # Also check for any saved charts mentioned in the report
-                                if "chart saved:" in content.lower() or "visualization saved:" in content.lower():
-                                    # Extract chart data if available
-                                    chart_data = await self._extract_chart_data(content)
-                                    if chart_data:
-                                        await self.send_update(
-                                            agent_name,
-                                            "Chart visualization ready",
-                                            "complete",
-                                            None,
-                                            chart_data
-                                        )
-                            else:
-                                # Regular update for other agents or non-final content
+                                if is_final_report:
+                                    # Send as complete for final reports
+                                    await self.send_update(
+                                        agent_name,
+                                        content,
+                                        "complete",
+                                        viz_data,
+                                        plotly_data
+                                    )
+                                    
+                                    # Check for any saved charts mentioned in the report
+                                    if "chart saved:" in content.lower() or "visualization saved:" in content.lower():
+                                        # Extract chart data if available
+                                        chart_data = await self._extract_chart_data(content)
+                                        if chart_data:
+                                            await self.send_update(
+                                                agent_name,
+                                                "Chart visualization ready",
+                                                "complete",
+                                                None,
+                                                chart_data
+                                            )
+                                # Skip intermediate Reporter Agent messages
+                                # Only send if it's a final output
+                            elif agent_name != "Reporter Agent":
+                                # Send updates for other agents
                                 await self.send_update(
                                     agent_name,
                                     content,
@@ -182,33 +192,6 @@ class GenesisSession:
                                     viz_data,
                                     plotly_data
                                 )
-                            
-                            # Extract any Plotly data from the message
-                            if hasattr(msg, 'additional_kwargs'):
-                                viz_data = msg.additional_kwargs.get('visualization_data')
-                                plotly_data = msg.additional_kwargs.get('plotly_data')
-                            
-                            # Send update
-                            await self.send_update(
-                                agent_name,
-                                content,
-                                "processing",
-                                viz_data,
-                                plotly_data
-                            )
-                            
-                            # Check if we have chart files mentioned
-                            if "CHART SAVED:" in content or "visualize_" in content:
-                                # Extract chart data if available
-                                chart_data = await self._extract_chart_data(content)
-                                if chart_data:
-                                    await self.send_update(
-                                        agent_name,
-                                        "Chart visualization ready",
-                                        "complete",
-                                        None,
-                                        chart_data
-                                    )
             
             # Send completion message
             await self.send_update(

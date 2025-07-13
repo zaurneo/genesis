@@ -109,34 +109,37 @@ const GenesisReportViewer = () => {
       }
     }
 
-    // Filter for Reporter Agent final reports and visualizations
+    // Only process final outputs from Reporter Agent
     if (agentUpdate.agent === 'Reporter Agent' || agentUpdate.agent === 'Stock Reporter Agent') {
-      // Check if this is a final report (contains certain keywords)
-      const content = agentUpdate.content.toLowerCase();
-      const isFinalReport = 
-        content.includes('report') || 
-        content.includes('analysis') || 
-        content.includes('summary') ||
-        content.includes('recommendation') ||
-        content.includes('conclusion');
+      // Only process if status is 'complete' - these are final outputs
+      if (agentUpdate.status === 'complete') {
+        const content = agentUpdate.content.toLowerCase();
+        
+        // Check if this is a final report
+        const isFinalReport = 
+          content.includes('report') || 
+          content.includes('analysis') || 
+          content.includes('summary') ||
+          content.includes('recommendation') ||
+          content.includes('conclusion') ||
+          content.includes('findings') ||
+          content.includes('executive summary');
 
-      if (isFinalReport) {
-        // Append to report content
-        setReportContent(prev => {
-          if (prev) return prev + '\n\n---\n\n' + agentUpdate.content;
-          return agentUpdate.content;
-        });
-      }
+        if (isFinalReport && !content.includes('chart visualization ready')) {
+          // This is the final report - set it (don't append)
+          setReportContent(agentUpdate.content);
+        }
 
-      // Check for visualizations
-      if (agentUpdate.plotly_data || (content.includes('chart') && content.includes('saved'))) {
-        const newViz = {
-          id: Date.now(),
-          title: extractChartTitle(agentUpdate.content),
-          plotlyData: agentUpdate.plotly_data,
-          content: agentUpdate.content
-        };
-        setVisualizations(prev => [...prev, newViz]);
+        // Check for visualizations
+        if (agentUpdate.plotly_data) {
+          const newViz = {
+            id: Date.now(),
+            title: extractChartTitle(agentUpdate.content),
+            plotlyData: agentUpdate.plotly_data,
+            content: agentUpdate.content
+          };
+          setVisualizations(prev => [...prev, newViz]);
+        }
       }
     }
 
@@ -403,10 +406,18 @@ Based on the multi-agent analysis, the stock shows positive momentum with strong
 
       {/* Debug Panel (Hidden by default) */}
       {showDebugMessages && (
-        <div className="absolute bottom-0 left-0 right-0 h-64 bg-gray-900 border-t border-gray-800 overflow-y-auto p-4">
-          <h3 className="text-sm font-semibold mb-2 text-gray-400">Debug Messages</h3>
+        <div className="fixed bottom-0 left-0 right-0 h-64 bg-gray-900 border-t border-gray-800 overflow-y-auto p-4 z-50">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-sm font-semibold text-gray-400">Debug Messages</h3>
+            <button
+              onClick={() => setShowDebugMessages(false)}
+              className="text-gray-500 hover:text-gray-300"
+            >
+              ✕
+            </button>
+          </div>
           <div className="space-y-2 text-xs">
-            {debugMessages.map((msg) => (
+            {debugMessages.slice(-50).map((msg) => (
               <div key={msg.id} className="flex">
                 <span className="text-gray-500 mr-2">{msg.timestamp}</span>
                 <span className="text-purple-400 mr-2">[{msg.agent}]</span>
